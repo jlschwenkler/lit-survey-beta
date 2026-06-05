@@ -1,0 +1,17 @@
+{
+  "description": "EXAMPLE issue list — copy this to ../issues_final.json and REWRITE the issues for YOUR topic. Each in-scope paper is scored 0-3 for DEPTH OF ENGAGEMENT on each issue. This is NOT a partition: a paper may load on several issues. The per-issue `weight` is used only by build_lit_table.py to compute weighted leverage; it does not affect the 0-3 scoring. Up-weight the issues most central to your thesis; down-weight peripheral ones; leave at 1.0 if unsure. (This example uses a made-up topic — 'the ethics of self-tracking / personal data' — purely to show the shape.)",
+  "depth_scale": {
+    "0": "absent — does not engage this issue",
+    "1": "mentions / touches in passing",
+    "2": "engages substantively (a section, sustained discussion)",
+    "3": "central — a core thesis or organizing concern of the paper"
+  },
+  "issues": [
+    {"id": "Q1", "label": "Autonomy and self-knowledge", "weight": 1.5,
+     "question": "Does self-tracking enhance or undermine autonomy and accurate self-knowledge?"},
+    {"id": "Q2", "label": "Privacy and third-party data", "weight": 1.0,
+     "question": "What privacy obligations arise when self-tracked data is shared with platforms, employers, or insurers?"},
+    {"id": "Q3", "label": "Quantification and value", "weight": 0.5,
+     "question": "Does reducing aspects of a life to metrics distort what is valuable about them?"}
+  ]
+}

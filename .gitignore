@@ -1,0 +1,63 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# This tool FETCHES third-party data (abstracts, citation metadata) into local
+# files for your own analysis. Those build artifacts are NOT meant to be
+# committed or redistributed — they aggregate copyrighted abstracts at scale and
+# may contain credentials from any pages you saved. Keep them out of git.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Secrets / local config
+.env
+*.local
+.claude/
+
+# ── Corpus build artifacts (the body of fetched data) — DO NOT COMMIT ──────────
+citation_graph.json
+engagement_matrix.json
+engagement_matrix.md
+citation_api_data.json
+paper_metadata.json
+parsed_references.json
+literature_candidates.md
+discovered_issues.json
+discovered_issues.md
+links.json
+issue_embeddings.npz
+
+# Your real issue list / project description (you supply these; keep them local
+# unless YOU choose to share them). The shipped examples/ versions are templates.
+issues_final.json
+PROJECT_DESCRIPTION*
+
+# ── Caches, logs, reports, scratch — run artifacts ────────────────────────────
+*_cache.json
+*.log
+*_report.md
+*_keys.txt
+*_dump.json
+*.tsv
+*.csv
+_*.json
+_*.txt
+
+# ── Copyrighted / saved source material — NEVER COMMIT ────────────────────────
+reading/
+txt/
+abstract_html/
+_archive/
+*.pdf
+caselaw_cache.json
+new_cases.json
+carroll_towing_full.txt
+
+# Built outputs
+literature_table.html
+
+# OS
+.DS_Store

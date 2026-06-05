@@ -1,0 +1,19 @@
+# Core — needed by the main pipeline (crawl, score, enrich, build table)
+anthropic>=0.40        # LLM calls (relevance/issue/engagement scoring) via llm_client.py
+requests>=2.31         # all scholarly-API HTTP calls (OpenAlex, Crossref, Semantic Scholar)
+urllib3>=2.0           # TLS-warning control (see http_util.py / INSECURE_TLS)
+numpy>=1.24            # issue-discovery embeddings/clustering (discover_issues.py)
+
+# Issue discovery (discover_issues.py) — local sentence embeddings + clustering.
+# Optional: only needed if you run the automated issue-clustering step.
+sentence-transformers>=2.2
+umap-learn>=0.5
+hdbscan>=0.8
+
+# PDF handling — optional, only for the case/PDF helper scripts:
+#   convert_pdfs.py      -> PyMuPDF (imported as `fitz`)
+#   make_case_pdf.py     -> reportlab
+#   ingest_abstract_html.py (PDF branch) -> pdfplumber
+PyMuPDF>=1.23
+reportlab>=4.0
+pdfplumber>=0.10

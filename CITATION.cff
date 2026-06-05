@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+title: "Literature-review pipeline (citation-graph-driven literature survey)"
+message: >-
+  If you use this software in your research, please cite it and acknowledge
+  the author. (The MIT license already requires keeping the copyright notice;
+  this is the academic-acknowledgment request on top of that.)
+type: software
+authors:
+  - family-names: Schwenkler
+    given-names: John
+abstract: >-
+  A reusable, topic-agnostic workflow for building a citation-graph-driven
+  literature review in a focused subliterature, then sorting it by issue into a
+  reading order. Standalone Python scripts that call a large language model
+  (Claude by default, provider-swappable) for relevance, issue-discovery, and
+  depth-of-engagement scoring.
+keywords:
+  - literature-review
+  - citation-graph
+  - bibliometrics
+  - large-language-models
+  - research-tools
+license: MIT
+version: 0.1.0-beta
+date-released: 2026-06-05

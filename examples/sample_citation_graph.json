@@ -1,0 +1,79 @@
+{
+  "_README": "SYNTHETIC sample graph — entirely made up, no real third-party abstracts. Its only purpose is to let you smoke-test the pipeline (score_engagement.py -> build_lit_table.py) without first running a multi-hour crawl. The topic matches examples/issues_final.example.json ('ethics of self-tracking'). Copy this to ../citation_graph.json to try the scoring step. Replace with your real crawl output for actual use.",
+  "nodes": {
+    "doi:10.0000/sample-001": {
+      "title": "The Quantified Self and the Limits of Self-Knowledge",
+      "authors": ["A. Example", "B. Placeholder"],
+      "year": 2019,
+      "venue": "Journal of Made-Up Studies",
+      "abstract": "This invented abstract argues that continuous self-tracking promises richer self-knowledge but often substitutes metric salience for genuine self-understanding, reshaping which features of a life agents attend to. It is a fabricated example for testing the pipeline.",
+      "abstract_source": "synthetic"
+    },
+    "doi:10.0000/sample-002": {
+      "title": "Personal Data, Platforms, and the New Privacy Bargains",
+      "authors": ["C. Sample"],
+      "year": 2021,
+      "venue": "Fictional Review of Technology Ethics",
+      "abstract": "A made-up abstract examining what obligations arise when self-tracked health data is shared with platforms, employers, and insurers, and whether consent does the normative work usually claimed for it. Entirely synthetic.",
+      "abstract_source": "synthetic"
+    },
+    "doi:10.0000/sample-003": {
+      "title": "Metrics, Meaning, and the Value of an Unmeasured Life",
+      "authors": ["D. Demo", "E. Stub"],
+      "year": 2018,
+      "venue": "Imaginary Quarterly of Philosophy",
+      "abstract": "This fabricated abstract asks whether reducing aspects of a life to numbers distorts what is valuable about them, drawing a contrast between instrumental and constitutive goods. Synthetic test data only.",
+      "abstract_source": "synthetic"
+    },
+    "doi:10.0000/sample-004": {
+      "title": "Autonomy, Nudges, and Self-Tracking Devices",
+      "authors": ["F. Fixture"],
+      "year": 2020,
+      "venue": "Journal of Made-Up Studies",
+      "abstract": "A synthetic abstract on whether self-tracking devices that nudge behavior enhance or erode autonomy, and how to tell the difference. Not a real paper.",
+      "abstract_source": "synthetic"
+    },
+    "doi:10.0000/sample-005": {
+      "title": "A Survey of Wearable Sensors (Engineering Background, Mostly Off-Topic)",
+      "authors": ["G. Noise"],
+      "year": 2017,
+      "venue": "Proceedings of the Synthetic Sensor Conference",
+      "abstract": "This invented abstract reviews wearable sensor hardware and battery life. It is included as an example of a paper that the crawl surfaces but that engages the ethical issues only marginally — useful for checking that low-relevance items score near zero.",
+      "abstract_source": "synthetic"
+    },
+    "doi:10.0000/sample-006": {
+      "title": "Surveillance Capitalism and the Self-Tracking Subject",
+      "authors": ["H. Mock", "I. Tester"],
+      "year": 2022,
+      "venue": "Fictional Review of Technology Ethics",
+      "abstract": "A fabricated abstract connecting self-tracking to broader debates about data extraction and power, with sustained discussion of privacy and a passing treatment of autonomy. Synthetic.",
+      "abstract_source": "synthetic"
+    },
+    "doi:10.0000/sample-007": {
+      "title": "Title-Only Example With No Abstract Anywhere",
+      "authors": ["J. Blank"],
+      "year": 2016,
+      "venue": "Imaginary Quarterly of Philosophy",
+      "abstract": "",
+      "abstract_source": null
+    }
+  },
+  "scores": {
+    "doi:10.0000/sample-001": {"score": 5, "reason": "seed paper"},
+    "doi:10.0000/sample-002": {"score": 4, "reason": "synthetic: clearly on-topic"},
+    "doi:10.0000/sample-003": {"score": 4, "reason": "synthetic: clearly on-topic"},
+    "doi:10.0000/sample-004": {"score": 4, "reason": "synthetic: clearly on-topic"},
+    "doi:10.0000/sample-005": {"score": 2, "reason": "synthetic: marginal relevance"},
+    "doi:10.0000/sample-006": {"score": 4, "reason": "synthetic: clearly on-topic"},
+    "doi:10.0000/sample-007": {"score": 3, "reason": "synthetic: title-only"}
+  },
+  "edges": [
+    {"from": "doi:10.0000/sample-002", "to": "doi:10.0000/sample-001"},
+    {"from": "doi:10.0000/sample-003", "to": "doi:10.0000/sample-001"},
+    {"from": "doi:10.0000/sample-004", "to": "doi:10.0000/sample-001"},
+    {"from": "doi:10.0000/sample-006", "to": "doi:10.0000/sample-002"},
+    {"from": "doi:10.0000/sample-006", "to": "doi:10.0000/sample-004"},
+    {"from": "doi:10.0000/sample-004", "to": "doi:10.0000/sample-003"},
+    {"from": "doi:10.0000/sample-007", "to": "doi:10.0000/sample-001"}
+  ]
+}
