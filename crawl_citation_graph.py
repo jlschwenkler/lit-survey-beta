@@ -129,8 +129,10 @@ def _check_configured():
 #   • Prefer MULTI-WORD phrases over single common words. Broad single field terms
 #     ("AI", "autonomy", "care") are almost always too permissive alone.
 #   • The two arms should capture two INDEPENDENT dimensions of your topic.
-#   • Aim for ~20% pass-through. Run `--estimate` first: if much more than ~20% of
-#     candidates pass, an arm is too broad. (Negligence ran ~20%; a too-flat filter
+#   • Aim for ~20% pass-through. After a crawl, check it: count how many scores have
+#     reason "failed keyword pre-filter" (free) vs the rest (paid LLM calls). If much
+#     more than ~20% of candidates pass, an arm is too broad. (Negligence ran ~20%;
+#     a too-flat filter
 #     on a medical topic ran 51% and wasted ~39% of the scoring spend on papers the
 #     model immediately rejected.)
 # Worked example below; a fuller one is in examples/negligence_config.example.py.
@@ -506,16 +508,23 @@ def resolve_seeds(seeds):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--hops",      type=int, default=2,
-                        help="Number of expansion hops (default 2)")
+    parser = argparse.ArgumentParser(
+        description="Snowball citation-graph crawler. COST WARNING: each hop fans "
+                    "out ~exponentially. Hop 2 typically scores ROUGHLY 10x as many "
+                    "papers as hop 1 (and each scored paper is a paid LLM call). For "
+                    "a focused topic with good seeds, hop 1 alone usually captures "
+                    "most of the highest-leverage works; add hop 2 only when you "
+                    "deliberately want broad coverage and accept the cost.")
+    parser.add_argument("--hops",      type=int, default=1,
+                        help="Expansion hops (DEFAULT 1). 1 = core literature, cheap; "
+                             "2 = broad coverage, ~10x the scored papers and cost. "
+                             "Start with 1.")
     parser.add_argument("--threshold", type=int, default=3,
-                        help="Min Claude relevance score to expand a node (default 3)")
+                        help="Min relevance score (1-5) to keep/expand a node "
+                             "(default 3). Use 4 for a tighter, cheaper, more "
+                             "on-topic corpus; 3 keeps broader contextual literature.")
     parser.add_argument("--resume",    action="store_true",
                         help="Resume from existing citation_graph.json")
-    parser.add_argument("--estimate", "--dry-run", action="store_true", dest="estimate",
-                        help="Estimate crawl size + cost and exit WITHOUT scoring "
-                             "(no API spend). Use this before a real run.")
     args = parser.parse_args()
 
     # ── Config guard: refuse to run on the unedited example (fail BEFORE spend) ──

@@ -122,6 +122,59 @@ template to replace, not as defaults.
 | `CROSSREF_MAILTO` | OpenAlex/Crossref "polite pool" (a contact email, not a secret) | recommended |
 | `SEMANTIC_SCHOLAR_API_KEY` | higher Semantic Scholar rate limits | optional |
 | `COURTLISTENER_API_KEY` | US case-law fetch (legal projects only) | optional |
+| `PROJECT_NAME` | sets the table's title/heading (e.g. `"End-of-life AI ethics"`) | optional |
+
+---
+
+## Cost & tuning (read before your first crawl)
+
+The crawl makes one **paid LLM call per candidate** that passes the keyword
+pre-filter. On a real topic this can be **thousands of papers** — the single place
+this tool can run up a surprising bill. Three knobs control it; tune them *before*
+a big run.
+
+**1. Hops — the biggest cost multiplier.** Each hop fans out roughly
+*exponentially*: hop 2 typically scores **~10× as many papers as hop 1**. In our two
+real test projects, **hop 1 alone captured ~⅔–70% of the highest-leverage ("star")
+papers.** So:
+
+> **Start with `--hops 1`.** It's the default now. It gives you the core literature
+> cheaply. Add `--hops 2` only when you deliberately want broad/contextual coverage
+> and accept the ~10× cost.
+
+**2. Threshold — how strict relevance must be to keep a paper.**
+`--threshold 3` (default) keeps broader contextual literature; **`--threshold 4`** is
+tighter, cheaper, and more directly on-topic (a smaller final table). If your topic
+is focused, prefer 4.
+
+**3. The keyword pre-filter — your cost gate.** This cheap regex decides which
+candidates are worth a paid LLM call. **Calibrating it well is the difference
+between a 20% and a 50%+ pass-through rate** — i.e. between scoring 7,000 and 12,000
+papers. It's a *method*, not a word list:
+
+- The gate passes a candidate if it matches **both arms** (`PHIL_TERMS` AND
+  `LAW_TERMS` in `crawl_citation_graph.py`) **or** a narrow high-signal escape term.
+  Think of the two arms as **two independent dimensions** of your topic.
+- **An AND-gate is only as selective as its weakest arm.** If one arm matches
+  "everything in your field" (e.g. `care`, `decision`, `patient`, `model`), the AND
+  buys you nothing and half your field floods through.
+- **Prefer multi-word phrases over single common words.** Single broad field terms
+  (`AI`, `autonomy`, `care`) are almost always too permissive alone; tight phrases
+  (`patient preference predictor`, `substituted judgment`) are near-perfect.
+- **Aim for ~20% pass-through.** After a crawl, count how many entries in
+  `citation_graph.json`'s scores have the reason `"failed keyword pre-filter"`
+  (free) versus the rest (paid). If far more than ~20% passed, an arm is too broad.
+
+The shipped negligence example is a good *structural* template (two genuinely
+independent, selective arms). Copy its shape; replace its terms for your topic.
+
+**Budgeting:** there's no built-in cost estimate yet (coming in a later release).
+Until then: run a **1-hop crawl first**, check the pass-through rate, and only widen
+to 2 hops once you've confirmed the filter isn't flooding.
+
+> One more expensive step to know about: `rank_handpull.py` uses the stronger
+> ("smart"/Sonnet) model by default. Pass `--fast` to use the cheaper model if its
+> worklist is large.
 
 ---
 
@@ -186,9 +239,12 @@ the graph yet.
 discovery clusters whatever is in the corpus, so enrich it first (and re-run
 whenever later steps pull in new works). Run **`enrich_authors.py` first**
 (author-less nodes silently defeat consolidation, abstract-matching, and recovery
-downstream), then the automatic abstract backfill (`backfill_abstracts.py --all`),
+downstream), then the automatic abstract backfill (`backfill_abstracts.py`),
 `rescue_by_citedness.py`, and the auto-grab half of `triage_no_abstract.py`. These
-depend only on the built graph, not the issues.
+depend only on the built graph, not the issues, so they run fine at this early
+stage (before any engagement matrix exists). Run plain `backfill_abstracts.py`
+here — it scopes to relevant nodes automatically; `--all` (whole graph, including
+already-rejected papers) is rarely needed and much slower.
 
 **Stage 3 — Discover the issues.** `discover_issues.py` embeds and clusters the
 relevant tier and asks the model to propose candidate issues (as questions) per
