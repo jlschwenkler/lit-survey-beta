@@ -11,6 +11,15 @@
 > [**Help us improve it — finding limitations with your assistant**](#help-us-improve-it--finding-limitations-with-your-assistant)
 > below, then [open an issue](../../issues).
 
+> ### 🤖 Running this with an AI assistant? Point it at the guide first.
+> This pipeline is meant to be *driven* by an assistant (Claude Code, Codex,
+> Cursor, …) but the **human makes the judgment calls** — scope, relevance,
+> issues, weights, cost tradeoffs. **Tell your assistant to read
+> [`GUIDE_FOR_ASSISTANTS.md`](GUIDE_FOR_ASSISTANTS.md) before starting.** It tells
+> the assistant to guide you through the choices (and to confirm before spending
+> money on a large crawl), not just execute. The guide's first step is to ask how
+> hands-on you want it to be.
+
 A reusable, **topic-agnostic** workflow for building a **citation-graph-driven
 literature review** in a focused subliterature, then sorting it by *issue* into a
 reading order. You give it a few seed papers and a description of your topic; it
