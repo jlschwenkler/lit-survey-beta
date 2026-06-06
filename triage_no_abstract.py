@@ -181,8 +181,13 @@ def main():
     nodes  = graph["nodes"]
     scores = graph["scores"]
     edges  = graph["edges"]
-    mat    = json.load(open(MATRIX_PATH))
-    in_matrix = {r["key"] for r in mat["rows"]}
+    # The matrix is OPTIONAL: it only exists after scoring (Stage 4), but triage is
+    # documented to run EARLY (Stage 2.6). If absent, no rows are matrix-excluded.
+    if os.path.exists(MATRIX_PATH):
+        mat = json.load(open(MATRIX_PATH))
+        in_matrix = {r["key"] for r in mat["rows"]}
+    else:
+        in_matrix = set()
 
     # in-corpus in-degree (raw) — the keyword-independent citedness signal
     indeg = Counter(e["to"] for e in edges)

@@ -183,13 +183,28 @@ def resolve_abstract(node):
     return None, None
 
 
-def select_targets(nodes, mat, scope_all):
+RELEVANCE_FLOOR = 3   # default scope (no matrix): nodes with crawl relevance >= this
+
+
+def select_targets(nodes, mat, scope_all, scores=None):
+    """Pick no-abstract nodes to backfill.
+       scope_all      -> the WHOLE graph (every no-abstract node; rare/expensive).
+       matrix present -> the matrix rows (the papers that will appear in the table).
+       no matrix yet  -> relevance-filtered graph nodes (score >= RELEVANCE_FLOOR),
+                         so this runs at the documented EARLY stage (before scoring)
+                         without scanning thousands of already-rejected papers."""
     if scope_all:
         return [(k, n) for k, n in nodes.items()
                 if not has_abs(n) and not n.get("is_seed")]
-    mkeys = {r["key"] for r in mat["rows"]}
-    return [(k, nodes[k]) for k in mkeys
-            if nodes.get(k) and not has_abs(nodes[k])]
+    if mat is not None:
+        mkeys = {r["key"] for r in mat["rows"]}
+        return [(k, nodes[k]) for k in mkeys
+                if nodes.get(k) and not has_abs(nodes[k])]
+    # No matrix yet: scope by crawl relevance (exists right after the crawl).
+    scores = scores or {}
+    return [(k, n) for k, n in nodes.items()
+            if not has_abs(n) and not n.get("is_seed")
+            and (scores.get(k) or {}).get("score", 0) >= RELEVANCE_FLOOR]
 
 
 def main():
@@ -204,10 +219,18 @@ def main():
 
     graph = json.load(open(GRAPH_PATH))
     nodes = graph["nodes"]
-    mat = json.load(open(MATRIX_PATH))
+    scores = graph.get("scores", {})
+    # The matrix is OPTIONAL: it only exists after scoring (Stage 4), but this
+    # script is documented to run EARLY (Stage 2.6). If it's absent, fall back to
+    # relevance-filtered graph nodes instead of crashing.
+    mat = json.load(open(MATRIX_PATH)) if os.path.exists(MATRIX_PATH) else None
 
     # ── prune mode: remove changed rows from the matrix, then exit ──
     if args.prune_matrix:
+        if mat is None:
+            print(f"No {os.path.basename(MATRIX_PATH)} yet — prune mode needs the "
+                  f"matrix (run score_engagement.py first).")
+            return
         if not os.path.exists(KEYS_PATH):
             print(f"No {os.path.basename(KEYS_PATH)} — run the backfill first.")
             return
@@ -222,9 +245,14 @@ def main():
         return
 
     cache = json.load(open(CACHE_PATH)) if os.path.exists(CACHE_PATH) else {}
-    targets = select_targets(nodes, mat, args.all)
-    print(f"No-abstract targets: {len(targets)} "
-          f"({'whole graph' if args.all else 'matrix rows'})")
+    targets = select_targets(nodes, mat, args.all, scores)
+    if args.all:
+        scope_desc = "whole graph"
+    elif mat is not None:
+        scope_desc = "matrix rows"
+    else:
+        scope_desc = f"relevance>={RELEVANCE_FLOOR} (no matrix yet)"
+    print(f"No-abstract targets: {len(targets)} ({scope_desc})")
 
     # ── Semantic Scholar batch pre-pass ──────────────────────────────────────
     # One (chunked) POST for every uncached target DOI. resolve_abstract() then

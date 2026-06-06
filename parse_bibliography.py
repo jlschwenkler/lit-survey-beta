@@ -33,16 +33,15 @@ OUT_PATH = os.path.join(FOLDER, "parsed_references.json")
 # Wave-1 bibliography-style source texts (stem -> txt filename).
 # (Author-date reference lists. Footnote-style sources like Finkelstein go
 # through parse_references.py instead.)
+# Which source texts to parse, as {stem: filename}. By DEFAULT this is
+# auto-discovered from every txt/*.txt file present — drop your extracted
+# author-date bibliography texts in txt/ and run, nothing to edit here. (The old
+# shipped hardcoded dict silently no-op'd for new users.) Use --stem to restrict to
+# specific files. Footnote-style sources go through parse_references.py instead.
+import glob as _glob
 WAVE1 = {
-    "YATES blameworthiness slips":              "YATES blameworthiness slips.txt",
-    "SARIN one thought too few":                "SARIN one thought too few.txt",
-    "SARIN punishment in negligence multifactorial":
-                                                "SARIN punishment in negligence multifactorial.txt",
-    "AYARS blaming for unreasonableness":       "AYARS blaming for unreasonableness.txt",
-    "RODRIGUEZ-BLANCO responsibility for negligence":
-                                                "RODRIGUEZ-BLANCO responsibility for negligence.txt",
-    "ZIMMERMAN ignorance and moral responsibility":
-                                                "ZIMMERMAN ignorance and moral responsibility.txt",
+    os.path.splitext(os.path.basename(p))[0]: os.path.basename(p)
+    for p in sorted(_glob.glob(os.path.join(TXT_DIR, "*.txt")))
 }
 
 REF_HEADER = re.compile(r"\n\s*(References|Bibliography|REFERENCES|Works Cited)\b[^\n]*\n")

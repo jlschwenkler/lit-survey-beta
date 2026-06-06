@@ -56,226 +56,86 @@ OA.headers["User-Agent"] = f"mailto:{EMAIL}"
 # Edit this if/when the project focus shifts.
 
 PROJECT_DESCRIPTION = """
-The project concerns moral and legal responsibility for negligent acts and
-omissions. Core themes include:
-
-Legal/criminal theory: the nature of negligence and whether it is a genuine
-form of culpability; the distinction between negligence and recklessness;
-objective vs. subjective standards of fault; justification and excuse in
-criminal and tort law; corrective justice and strict liability; the
-reasonable person standard; mens rea; tracing.
-
-Philosophy of action and moral responsibility: attributability vs.
-accountability; reasons-responsiveness theories; reactive attitudes and
-Strawsonian frameworks; the epistemic condition on responsibility (moral
-ignorance, culpable ignorance); voluntariness and control; omissions and
-failures to act; free will and its relevance to responsibility; the
-quality-of-will approach (Watson, Smith, Arpaly); negligence as a failure
-of attention or care.
-
-The literature spans moral philosophy, philosophy of action/mind, criminal
-law theory, and tort theory.
+REPLACE THIS with a prose description of YOUR project/topic. This text is what the
+model uses to judge whether each crawled paper is relevant (scored 1-5), so it is
+the single most important knob in the whole pipeline. Be concrete about the themes,
+debates, authors, and subfields that count as "in scope." See the worked negligence
+example in examples/negligence_config.example.py for the level of detail to aim for.
 """
 
 # ── Seed paper definitions ────────────────────────────────────────────────────
-# These are the papers we already have in the corpus.
-# Add OA IDs and S2 IDs as known. The script will attempt to resolve any
-# that are missing.
+# REPLACE the empty list below with YOUR starting papers — the works you already
+# know belong at the center of your topic. The crawl snowballs outward from these.
+# Each entry: a "stem" (any short unique label), a title, authors, and whatever
+# ids you know (oa_id = OpenAlex, s2_id = Semantic Scholar, doi). Leave unknown ids
+# as None; the script resolves what it can. A worked example with real entries is in
+# examples/negligence_config.example.py — copy its shape.
+#
+# SCHEMA (one dict per seed):
+#   {"stem": "SHORT label", "title": "Full Title",
+#    "authors": ["First Last"], "oa_id": None, "s2_id": None, "doi": None}
 
 SEED_PAPERS = [
-    {
-        "stem":   "HURD the innocence of negligence",
-        "title":  "The Innocence of Negligence",
-        "authors":["Heidi Hurd"],
-        "oa_id":  "W3121936627",
-        "s2_id":  None,
-        "doi":    None,
-    },
-    {
-        "stem":   "ALEXANDER FERZAN against negligence liability",
-        "title":  "Against Negligence Liability",
-        "authors":["Larry Alexander", "Kimberly Ferzan"],
-        "oa_id":  "W2484803952",
-        "s2_id":  None,
-        "doi":    None,
-    },
-    {
-        "stem":   "FERZAN justification and excuse",
-        "title":  "Justification and Excuse",
-        "authors":["Kimberly Ferzan"],
-        "oa_id":  None,
-        "s2_id":  None,
-        "doi":    "10.1093/oxfordhb/9780195314854.003.0010",
-    },
-    {
-        "stem":   "ALEXANDER FERZAN crime and culpability",
-        "title":  "Crime and Culpability: A Theory of Criminal Law",
-        "authors":["Larry Alexander", "Kimberly Ferzan"],
-        "oa_id":  "W606236685",
-        "s2_id":  None,
-        "doi":    None,
-    },
-    # Moore & Hurd "Punishing the Awkward..." — closely related, high citation count
-    {
-        "stem":   "MOORE HURD punishing the awkward",
-        "title":  "Punishing the Awkward, the Stupid, the Weak, and the Selfish",
-        "authors":["Michael Moore", "Heidi Hurd"],
-        "oa_id":  "W2011573935",
-        "s2_id":  None,
-        "doi":    "10.1007/s11572-011-9114-0",
-    },
-    # ── Wave 4 seed: Duff "Two Models of Criminal Fault" (2019) ───────────────
-    # Central comparative-fault paper (advertence vs. practical-reasoning models);
-    # OA/S2 carry no reference list for it, so backward citations come from the
-    # parsed footnotes in parsed_references.json.
-    {
-        "stem":   "DUFF two models of criminal fault",
-        "title":  "Two Models of Criminal Fault",
-        "authors":["R. A. Duff"],
-        "oa_id":  "W2969294810",
-        "s2_id":  "504ba6bef9096ac15a2e6395f5c6d80a38a94c39",
-        "doi":    "10.1007/s11572-019-09504-w",
-    },
-    # ── Wave 2 seeds: ethics / philosophy of action ───────────────────────────
-    # Added to expand coverage beyond legal theory into moral philosophy,
-    # reasons-responsiveness, attributability, and epistemic conditions.
-    {
-        "stem":   "SMITH responsibility for attitudes",
-        "title":  "Responsibility for Attitudes: Activity and Passivity in Mental Life",
-        "authors":["Angela M. Smith"],
-        "oa_id":  "W2044818626",
-        "s2_id":  None,
-        "doi":    None,
-    },
-    {
-        "stem":   "WATSON two faces of responsibility",
-        "title":  "Two Faces of Responsibility",
-        "authors":["Gary Watson"],
-        "oa_id":  "W2137209613",
-        "s2_id":  None,
-        "doi":    None,
-    },
-    {
-        "stem":   "ROSEN culpability and ignorance",
-        "title":  "Culpability and Ignorance",
-        "authors":["Gideon Rosen"],
-        "oa_id":  "W1968502652",
-        "s2_id":  None,
-        "doi":    None,
-    },
-    {
-        "stem":   "CLARKE omissions agency metaphysics",
-        "title":  "Omissions: Agency, Metaphysics, and Responsibility",
-        "authors":["Randolph Clarke"],
-        "oa_id":  "W646780389",
-        "s2_id":  None,
-        "doi":    None,
-    },
-    {
-        "stem":   "SCANLON moral dimensions",
-        "title":  "Moral Dimensions: Permissibility, Meaning, Blame",
-        "authors":["T.M. Scanlon"],
-        "oa_id":  "W1508831339",
-        "s2_id":  None,
-        "doi":    None,
-    },
-    {
-        "stem":   "FISCHER RAVIZZA responsibility and control",
-        "title":  "Responsibility and Control: A Theory of Moral Responsibility",
-        "authors":["John Martin Fischer", "Mark Ravizza"],
-        "oa_id":  "W2044908625",
-        "s2_id":  None,
-        "doi":    None,
-    },
-    {
-        "stem":   "STRAWSON freedom and resentment",
-        "title":  "Freedom and Resentment",
-        "authors":["P.F. Strawson"],
-        "oa_id":  "W2270772451",
-        "s2_id":  None,
-        "doi":    None,
-    },
-    {
-        "stem":   "ZIMMERMAN moral responsibility and ignorance",
-        "title":  "Moral Responsibility and Ignorance",
-        "authors":["Michael J. Zimmerman"],
-        "oa_id":  "W2023270709",
-        "s2_id":  None,
-        "doi":    None,
-    },
-    # ── Wave 3 seeds: quality-of-will / reasons-responsiveness ───────────────
-    # Manually bumped after noticing these were underscored (score 1-2) due to
-    # titles not mentioning negligence/law. Central to the quality-of-will and
-    # reasons-responsiveness literature directly relevant to the project.
-    {
-        "stem":   "ARPALY unprincipled virtue",
-        "title":  "Unprincipled Virtue",
-        "authors":["Nomy Arpaly"],
-        "oa_id":  None,
-        "s2_id":  None,
-        "doi":    "10.1093/0195152042.001.0001",
-    },
-    {
-        "stem":   "ARPALY in praise of desire",
-        "title":  "In Praise of Desire",
-        "authors":["Nomy Arpaly", "Timothy Schroeder"],
-        "oa_id":  None,
-        "s2_id":  None,
-        "doi":    "10.1093/acprof:oso/9780199348169.001.0001",
-    },
-    {
-        "stem":   "WOLF sanity and the metaphysics of responsibility",
-        "title":  "Sanity and the Metaphysics of Responsibility",
-        "authors":["Susan Wolf"],
-        "oa_id":  None,
-        "s2_id":  None,
-        "doi":    "10.1017/cbo9780511625411.003",
-    },
-    {
-        "stem":   "WOLF freedom within reason",
-        "title":  "Freedom Within Reason",
-        "authors":["Susan Wolf"],
-        "oa_id":  None,
-        "s2_id":  None,
-        "doi":    "10.1017/cbo9780511614194.012",
-    },
-    {
-        "stem":   "WATSON agency and answerability",
-        "title":  "Agency and Answerability",
-        "authors":["Gary Watson"],
-        "oa_id":  None,
-        "s2_id":  None,
-        "doi":    "10.1093/acprof:oso/9780199272273.001.0001",
-    },
-    {
-        "stem":   "SCANLON what we owe to each other",
-        "title":  "What We Owe to Each Other",
-        "authors":["T.M. Scanlon"],
-        "oa_id":  None,
-        "s2_id":  None,
-        "doi":    "10.2307/j.ctv134vmrn",
-    },
-    {
-        "stem":   "ROSEN kleinbart the oblivious",
-        "title":  "Kleinbart the Oblivious and Other Tales of Ignorance and Responsibility",
-        "authors":["Gideon Rosen"],
-        "oa_id":  None,
-        "s2_id":  None,
-        "doi":    "10.5840/jphil20081051023",
-    },
-    {
-        "stem":   "LEVY hard luck",
-        "title":  "Hard Luck: How Luck Undermines Free Will and Moral Responsibility",
-        "authors":["Neil Levy"],
-        "oa_id":  None,
-        "s2_id":  None,
-        "doi":    "10.1093/acprof:oso/9780199601387.001.0001",
-    },
+    # {"stem": "AUTHOR short title", "title": "...", "authors": ["..."],
+    #  "oa_id": None, "s2_id": None, "doi": None},
 ]
 
 
+def _check_configured():
+    """Fail LOUDLY and EARLY (before any API spend) if the user hasn't replaced the
+    shipped example config. The #1 new-user footgun is running the crawl with empty
+    or example seeds / the placeholder project description and silently getting
+    nonsense (or a wrong-topic corpus). Catch it here."""
+    problems = []
+    if not SEED_PAPERS:
+        problems.append(
+            "  • SEED_PAPERS is empty. Add your starting papers (see the schema in\n"
+            "    crawl_citation_graph.py and the worked example in\n"
+            "    examples/negligence_config.example.py).")
+    if "REPLACE THIS" in PROJECT_DESCRIPTION or len(PROJECT_DESCRIPTION.strip()) < 80:
+        problems.append(
+            "  • PROJECT_DESCRIPTION is still the placeholder. Write a real description\n"
+            "    of your topic — it is what the model uses to judge relevance.")
+    # Detect leftover negligence-example seeds (partial replacement is as bad as none).
+    _EXAMPLE_STEMS = {"hurd the innocence of negligence",
+                      "alexander ferzan against negligence liability"}
+    for s in SEED_PAPERS:
+        if (s.get("stem", "").strip().lower()) in _EXAMPLE_STEMS:
+            problems.append(
+                f"  • SEED_PAPERS still contains an EXAMPLE entry ({s.get('stem')!r}).\n"
+                "    Remove ALL example seeds — leftover ones contaminate your corpus.")
+            break
+    if problems:
+        raise SystemExit(
+            "\n[crawl_citation_graph] Not configured for your project yet:\n\n"
+            + "\n".join(problems)
+            + "\n\nEdit PROJECT_DESCRIPTION and SEED_PAPERS near the top of "
+              "crawl_citation_graph.py, then re-run.\n")
+
+
 # ── Pre-filter keywords (cheap first pass before Claude) ─────────────────────
-# A paper must match at least one term from each group to proceed to Claude scoring.
+# ⚠️ RETUNE THESE FOR YOUR TOPIC. This cheap gate decides which candidates are
+# worth a PAID LLM relevance call — it is your single biggest COST lever. The terms
+# below are the negligence EXAMPLE; leaving them passes the wrong papers.
+#
+# HOW IT WORKS: a candidate passes if it matches BOTH arms (PHIL_TERMS AND
+# LAW_TERMS), OR a narrow high-signal escape term (PHIL_ACTION_TERMS) on its own.
+# Think of PHIL_TERMS / LAW_TERMS as "dimension A" and "dimension B" of your topic.
+#
+# HOW TO CALIBRATE (a METHOD, not a word list — see README "Tuning the pre-filter"):
+#   • An AND-gate is only as selective as its WEAKEST arm. Make BOTH arms genuinely
+#     narrowing. If one arm matches "everything in the field" (e.g. "care",
+#     "decision", "patient", "model"), the AND buys you nothing.
+#   • Prefer MULTI-WORD phrases over single common words. Broad single field terms
+#     ("AI", "autonomy", "care") are almost always too permissive alone.
+#   • The two arms should capture two INDEPENDENT dimensions of your topic.
+#   • Aim for ~20% pass-through. After a crawl, check it: count how many scores have
+#     reason "failed keyword pre-filter" (free) vs the rest (paid LLM calls). If much
+#     more than ~20% of candidates pass, an arm is too broad. (Negligence ran ~20%;
+#     a too-flat filter
+#     on a medical topic ran 51% and wasted ~39% of the scoring spend on papers the
+#     model immediately rejected.)
+# Worked example below; a fuller one is in examples/negligence_config.example.py.
 
 PHIL_TERMS = re.compile(
     r"\b(moral|ethics|ethical|culpab|blame|blameworthi|responsib|intention|"
@@ -648,14 +508,27 @@ def resolve_seeds(seeds):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--hops",      type=int, default=2,
-                        help="Number of expansion hops (default 2)")
+    parser = argparse.ArgumentParser(
+        description="Snowball citation-graph crawler. COST WARNING: each hop fans "
+                    "out ~exponentially. Hop 2 typically scores ROUGHLY 10x as many "
+                    "papers as hop 1 (and each scored paper is a paid LLM call). For "
+                    "a focused topic with good seeds, hop 1 alone usually captures "
+                    "most of the highest-leverage works; add hop 2 only when you "
+                    "deliberately want broad coverage and accept the cost.")
+    parser.add_argument("--hops",      type=int, default=1,
+                        help="Expansion hops (DEFAULT 1). 1 = core literature, cheap; "
+                             "2 = broad coverage, ~10x the scored papers and cost. "
+                             "Start with 1.")
     parser.add_argument("--threshold", type=int, default=3,
-                        help="Min Claude relevance score to expand a node (default 3)")
+                        help="Min relevance score (1-5) to keep/expand a node "
+                             "(default 3). Use 4 for a tighter, cheaper, more "
+                             "on-topic corpus; 3 keeps broader contextual literature.")
     parser.add_argument("--resume",    action="store_true",
                         help="Resume from existing citation_graph.json")
     args = parser.parse_args()
+
+    # ── Config guard: refuse to run on the unedited example (fail BEFORE spend) ──
+    _check_configured()
 
     # ── Load or initialise graph ───────────────────────────────────────────
     if args.resume and os.path.exists(GRAPH_PATH):

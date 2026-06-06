@@ -270,15 +270,16 @@ def dedup_key(rec):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-CORPUS_STEMS = [
-    "HURD the innocence of negligence",
-    "ALEXANDER FERZAN against negligence liability",
-    "FERZAN justification and excuse",
-    "ALEXANDER FERZAN crime and culpability 2 the-essence-of-culpability",
-    "ALEXANDER FERZAN crime and culpability 3 negligence",
-    "DUFF two models of criminal fault",
-    "FINKELSTEIN responsibility for unintended consequences",
-]
+# Which source texts to parse. By DEFAULT this is auto-discovered from every
+# txt/*.txt file present (the filesystem is the source of truth) — so you just drop
+# your extracted texts in txt/ and run, with nothing to edit here. The old shipped
+# hardcoded list silently no-op'd for new users (every stem "missing"). To restrict
+# to specific files instead, set CORPUS_STEMS to an explicit list of stems.
+import glob as _glob
+CORPUS_STEMS = sorted(
+    os.path.splitext(os.path.basename(p))[0]
+    for p in _glob.glob(os.path.join(TXT_DIR, "*.txt"))
+)
 
 def main():
     # Load existing results

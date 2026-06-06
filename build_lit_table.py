@@ -18,7 +18,8 @@ Columns shown:
      · cit/yr overall · cit/yr in-corpus · then one column per ISSUE (depth 0-3)
 
 Conventions baked in (match core_reading_order.md):
-  - LEVERAGE = summed depth across the six CORE issues A1..A6 (max 18).
+  - LEVERAGE = weighted summed depth across the CORE issues (those marked
+    core:true in issues_final.json; defaults to ALL issues for a new project).
   - Default-visible rows: leverage >= VISIBLE_MIN. The rest are hidden behind a
     "show all" toggle (they are crawl-relevant but engage the core debate only
     lightly).
@@ -42,6 +43,12 @@ MATRIX_PATH= os.path.join(FOLDER, "engagement_matrix.json")
 ISSUES_PATH= os.path.join(FOLDER, "issues_final.json")  # per-issue WEIGHTS live here
 LINKS_PATH = os.path.join(FOLDER, "links.json")   # enrich_links.py output (optional)
 OUT_HTML   = os.path.join(READING, "literature_table.html")
+
+# Project name shown in the table's <title> and <h1>. Set it for YOUR project via
+# the PROJECT_NAME env var (e.g. export PROJECT_NAME="End-of-life AI ethics"), or
+# edit the default here. The old hardcoded "Negligence literature" shipped on every
+# user's table regardless of topic — this fixes that.
+PROJECT_NAME = os.environ.get("PROJECT_NAME", "Literature")
 
 CORE       = ["A1", "A2", "A3", "A4", "A5a", "A5b", "A6"]
 SRC_RANK   = {"full": 2, "abstract": 1, "title": 0}
@@ -331,12 +338,23 @@ def main():
 
     # Per-issue weights are authoritative in issues_final.json (the matrix's own
     # `issues` block may predate the weights). Any id missing falls back to 1.0.
+    # The same file may optionally mark each issue "core": true/false — CORE issues
+    # are the ones counted toward LEVERAGE and shown as filter chips.
     issue_weights = {}
+    issue_core = {}
     if os.path.exists(ISSUES_PATH):
         fin = json.load(open(ISSUES_PATH))
         issue_weights = {i["id"]: float(i.get("weight", 1.0))
                          for i in fin.get("issues", [])}
+        issue_core = {i["id"]: bool(i.get("core", True))
+                      for i in fin.get("issues", [])}
     wt_of = lambda iid: issue_weights.get(iid, 1.0)
+
+    # CORE is derived from the actual issues, NOT hardcoded — an issue is core
+    # unless issues_final.json explicitly sets "core": false. This is what makes
+    # the table work for ANY topic (the old hardcoded A1..A6 produced leverage 0,
+    # 0 visible rows, and mislabeled filter chips on every non-negligence project).
+    CORE = [iid for iid in issue_ids if issue_core.get(iid, True)]
 
     # Precompute leverage for every row, then detect chapter↔monograph clusters so
     # the star rule can keep only the highest-leverage node per cluster.
@@ -458,8 +476,8 @@ def main():
                              -(x.get("cpy") or 0), x["author"].lower()))
 
     payload = {
-        "issues": [{"id": i["id"], "label": i["label"],
-                    "question": i["question"], "core": i["id"] in CORE}
+        "issues": [{"id": i["id"], "label": i.get("label", i["id"]),
+                    "question": i.get("question", ""), "core": i["id"] in CORE}
                    for i in issues],
         "rows": recs,
         "visible_min": VISIBLE_MIN, "star_min": STAR_MIN,
@@ -469,8 +487,9 @@ def main():
         "n_no_abstract": sum(1 for r in recs if r.get("no_abstract")),
     }
 
-    html_doc = HTML_TEMPLATE.replace("/*DATA*/null",
-                                     json.dumps(payload, ensure_ascii=False))
+    html_doc = (HTML_TEMPLATE
+                .replace("/*DATA*/null", json.dumps(payload, ensure_ascii=False))
+                .replace("/*PROJECT_NAME*/", PROJECT_NAME))
     os.makedirs(READING, exist_ok=True)
     open(OUT_HTML, "w", encoding="utf-8").write(html_doc)
     print(f"Wrote {OUT_HTML}")
@@ -485,7 +504,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Negligence literature — engagement table</title>
+<title>/*PROJECT_NAME*/ — engagement table</title>
 <style>
   :root { --bg:#fbfbfa; --ink:#1d1d1b; --muted:#6b6b66; --line:#e3e2dd;
           --accent:#7a1f1f; --hi:#fff6e6; --star:#c8911a; }
@@ -610,7 +629,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 </style>
 </head>
 <body>
-<h1>Negligence literature — engagement table</h1>
+<h1>/*PROJECT_NAME*/ — engagement table</h1>
 <div class="sub">
   Papers turned up by the citation crawl, scored 0–3 for depth of engagement on
   each issue. <b>Leverage</b> = summed depth across the six core issues (A1–A6,
@@ -665,7 +684,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <script>
 const DATA = /*DATA*/null;
-const CORE = ["A1","A2","A3","A4","A5a","A5b","A6"];
+// CORE issue ids, derived from the data (payload marks each issue core:true/false),
+// NOT hardcoded — so the leverage chips/filters match THIS project's issues.
+const CORE = DATA.issues.filter(i=>i.core!==false).map(i=>i.id);
 // Short badge + tooltip for non-DOI fallback links (papers with no DOI).
 const LINK_TAG = {landing:"publisher", oa:"full text", record:"record",
                   philpapers_search:"PhilPapers ⌕"};

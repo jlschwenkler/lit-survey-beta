@@ -147,11 +147,21 @@ def rank_one(n):
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    global MODEL
+    ap = argparse.ArgumentParser(
+        description="Rank the hand-pull worklist by title-fit. NOTE: this uses the "
+                    "stronger (and more expensive) 'smart' model by default, because "
+                    "it is a judgment call over a SMALL worklist. Use --fast for the "
+                    "cheaper model if your worklist is large or budget is tight.")
     ap.add_argument("--limit", type=int, default=None,
                     help="cap rows ranked, taking the top-N by in-corpus in-degree "
                          "(smoke test)")
+    ap.add_argument("--fast", action="store_true",
+                    help="use the cheaper 'fast' model instead of 'smart' (lower "
+                         "cost, slightly rougher title-fit judgments)")
     args = ap.parse_args()
+    if args.fast:
+        MODEL = "fast"
 
     if not os.path.exists(HANDPULL_KEYS):
         raise SystemExit(f"missing {os.path.basename(HANDPULL_KEYS)} — run "
