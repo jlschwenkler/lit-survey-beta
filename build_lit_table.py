@@ -50,7 +50,24 @@ OUT_HTML   = os.path.join(READING, "literature_table.html")
 # user's table regardless of topic — this fixes that.
 PROJECT_NAME = os.environ.get("PROJECT_NAME", "Literature")
 
-CORE       = ["A1", "A2", "A3", "A4", "A5a", "A5b", "A6"]
+# ── Abstract embedding scope (file-size vs. self-containedness tradeoff) ────────
+# The table is ONE self-contained .html file you can email/share with no server.
+# Embedding every abstract is what makes it fully offline-searchable, but on a big
+# crawl it bloats the file (the negligence/PPP corpora ran ~0.5 MB of abstract text
+# alone, pushing the file past 4 MB). This knob lets you choose the tradeoff:
+#   ABSTRACTS=all      embed every paper's abstract (DEFAULT — largest file, fully
+#                      searchable across the whole corpus; keeps the shared file
+#                      self-contained and grep-able).
+#   ABSTRACTS=visible  embed abstracts ONLY for above-the-fold (visible) rows
+#                      (smaller shareable file that still preserves inline reading +
+#                      search for the papers that matter; hidden rows still appear,
+#                      just without an expandable abstract).
+#   ABSTRACTS=none     embed no abstract text (smallest file; titles/metadata only).
+# Set via env, e.g.  export ABSTRACTS=visible
+ABSTRACTS  = os.environ.get("ABSTRACTS", "all").strip().lower()
+if ABSTRACTS not in ("all", "visible", "none"):
+    ABSTRACTS = "all"
+
 SRC_RANK   = {"full": 2, "abstract": 1, "title": 0}
 
 # ── Title display tidy: down-case SHOUTING titles ──────────────────────────────
@@ -167,11 +184,25 @@ def cluster_maps(rows, lev_of):
 
 # ── Leverage / ranking knobs ──────────────────────────────────────────────────
 # LEVERAGE is WEIGHTED depth across the core issues: Σ weight·depth, with the
-# per-issue weight read from issues_final.json (authoritative; edit it there).
-# Thesis-centered weights (2026-05-31): A1=A4=A6=1.5, A2=A5b=1.0, A3=A5a=0.5
-# → max leverage 22.5 (was a flat 18). Thresholds below are tuned to that scale.
-VISIBLE_MIN= 9.0   # weighted leverage >= this is shown by default
-STAR_MIN   = 15.0  # composite (weighted leverage + cite boost) >= this earns ★
+# per-issue weight read from issues_final.json (authoritative; edit it there). Each
+# issue's weight defaults to 1.0; set higher weights on the issues most central to
+# your thesis so deep engagement THERE counts for more. (The negligence example used
+# A1=A4=A6=1.5, A2=A5b=1.0, A3=A5a=0.5 — see examples/issues_final.example.json.)
+#
+# VISIBLE / STAR cutoffs: by DEFAULT these AUTO-SCALE to each project's own leverage
+# distribution — star = roughly the top STAR_PCTL of scored papers, visible = the top
+# VISIBLE_PCTL — so a fresh topic gets a sensible "short top tier + readable shortlist"
+# without hand-tuning. The absolute floors below are only a FALLBACK (tiny corpora,
+# degenerate distributions). To PIN absolute cutoffs instead of auto-scaling, set the
+# VISIBLE_MIN / STAR_MIN env vars (e.g. export STAR_MIN=15). The build prints the
+# leverage distribution and what the cutoffs resolved to, so you can adjust informedly.
+VISIBLE_PCTL = float(os.environ.get("VISIBLE_PCTL", "75"))  # top ~quartile visible
+STAR_PCTL    = float(os.environ.get("STAR_PCTL",    "95"))  # top ~5% starred
+VISIBLE_MIN_FALLBACK = 9.0    # used only if auto-scale can't (e.g. too few rows)
+STAR_MIN_FALLBACK    = 15.0
+# Env overrides PIN an absolute cutoff and disable auto-scale for that threshold:
+VISIBLE_MIN_ENV = os.environ.get("VISIBLE_MIN")   # None unless user pins it
+STAR_MIN_ENV    = os.environ.get("STAR_MIN")
 
 # Citation boost: a flat bonus added to leverage for prominent papers, but GATED
 # so off-topic blockbusters aren't promoted. A paper is boosted only if it both
@@ -196,17 +227,11 @@ CITE_CPY_THRESHOLD = 3.0   # min cites/yr to be eligible for the boost
 # gate uses the ENDOGENOUS in_corpus_cites_weighted (tiered 3/2/1 by citer tier).
 STAR_CITE_FLOOR = 5.0   # min weighted in-corpus cites to earn a star
 # HAND-KEEP override — node keys force-starred despite failing the citedness floor.
-# These are genuine core works the floor overshoots (foundational/older books with
-# thin TRACKED edges, or substantive pieces low on in-corpus uptake). Curated by
-# hand; each entry is a deliberate exception, not a pattern. (2026-06-01)
-STAR_HAND_KEEP = {
-    "oa:W1544005079",                                  # Hart, Punishment & Responsibility (1968)
-    "doi:10.1111/phc3.12490",                          # Sarch, Willful Ignorance in Law and Morality (2018)
-    "doi:10.1093/acprof:oso/9780199243495.003.0010",   # Tadros, Recklessness and the Duty to Take Care (2002)
-    # Hurd, The Innocence of Negligence (2016, oa:W3121936627) removed 2026-06-02
-    # at JS's request — let the product reflect what the process turns up; it stars
-    # only if it clears the in-corpus citedness floor on its own.
-}
+# Use this for genuine core works the floor overshoots (foundational/older books with
+# thin TRACKED edges, or substantive pieces low on in-corpus uptake). Each entry is a
+# deliberate, hand-curated exception — add the node key (e.g. "oa:W…", "doi:10.…")
+# from your own corpus. Empty by default; populate it only for YOUR topic.
+STAR_HAND_KEEP = set()
 
 def norm_doi_url(url):
     """Strip a doi.org URL down to the bare DOI (for links.json kind=='doi')."""
@@ -364,6 +389,45 @@ def main():
     # display title of each parent monograph (for the "ch. of …" tag on children)
     title_of = {r["key"]: tidy_title(r["title"]) for r in rows}
 
+    # ── Resolve VISIBLE / STAR cutoffs (auto-scale by default; env pins absolute) ──
+    # The distribution is taken over SCORED rows only (title-only/no-abstract rows
+    # carry no real leverage and reviews are handled separately), so percentiles
+    # reflect the papers that actually engage the issues.
+    def _pctl(sorted_vals, p):
+        if not sorted_vals:
+            return None
+        if p <= 0:   return sorted_vals[0]
+        if p >= 100: return sorted_vals[-1]
+        # linear interpolation between closest ranks
+        idx = (p / 100) * (len(sorted_vals) - 1)
+        lo = int(idx); hi = min(lo + 1, len(sorted_vals) - 1)
+        return sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (idx - lo)
+
+    scored_levs = sorted(
+        lev_of[r["key"]] for r in rows
+        if not r.get("is_review")
+        and r.get("text_source") != "title"
+    )
+    # Auto-scale needs enough rows to be meaningful; below this, use fallback floors.
+    _AUTOSCALE_MIN_ROWS = 12
+    can_autoscale = len(scored_levs) >= _AUTOSCALE_MIN_ROWS
+
+    if VISIBLE_MIN_ENV is not None:
+        VISIBLE_MIN = float(VISIBLE_MIN_ENV); vis_src = "env VISIBLE_MIN"
+    elif can_autoscale:
+        VISIBLE_MIN = round(_pctl(scored_levs, VISIBLE_PCTL), 1)
+        vis_src = f"auto: top {round(100 - VISIBLE_PCTL)}% (p{round(VISIBLE_PCTL)})"
+    else:
+        VISIBLE_MIN = VISIBLE_MIN_FALLBACK; vis_src = "fallback (too few rows)"
+
+    if STAR_MIN_ENV is not None:
+        STAR_MIN = float(STAR_MIN_ENV); star_src = "env STAR_MIN"
+    elif can_autoscale:
+        STAR_MIN = round(_pctl(scored_levs, STAR_PCTL), 1)
+        star_src = f"auto: top {round(100 - STAR_PCTL)}% (p{round(STAR_PCTL)})"
+    else:
+        STAR_MIN = STAR_MIN_FALLBACK; star_src = "fallback (too few rows)"
+
     recs = []
     for r in rows:
         sc = r.get("scores", {})
@@ -411,6 +475,13 @@ def main():
         # citedness). If an abstract turns up later they re-score and get real
         # leverage. Reviews already handled separately.
         no_abstract = (r.get("text_source") == "title") and not is_review
+        # Whether to EMBED this row's abstract text (file-size knob; see ABSTRACTS
+        # above). "all" = every row; "visible" = only above-the-fold rows (same
+        # condition as the `visible` flag below); "none" = no embedded abstracts.
+        # A row with no embedded abstract simply renders no expand toggle and is not
+        # matched by abstract-text search — its metadata still shows normally.
+        _row_visible = (not is_review) and (not no_abstract) and lev >= VISIBLE_MIN
+        emit_abstract = (ABSTRACTS == "all") or (ABSTRACTS == "visible" and _row_visible)
         # ── Star = deep engagement AND corpus uptake (selective; see knobs above) ──
         # The star FLAG requires WEIGHTED LEVERAGE >= STAR_MIN (not composite — the
         # leverage measure, consistent with the visible threshold) AND endogenous
@@ -463,9 +534,13 @@ def main():
             # are never mistaken for an author abstract or full text.
             "abstract_source": (nodes.get(r["key"], {}) or {}).get("abstract_source"),
             # full abstract text, embedded so the page is self-contained and the
-            # search box can match abstract content (not just author/title). ~530KB
-            # across the corpus; keeps the HTML a single offline-openable file.
-            "abstract": ((nodes.get(r["key"], {}) or {}).get("abstract") or "").strip(),
+            # search box can match abstract content (not just author/title). This is
+            # the bulk of the file size on a big crawl, so it is GATED by the
+            # ABSTRACTS knob (all / visible / none) via emit_abstract above — a
+            # non-embedded row stores "" and renders no abstract toggle.
+            "abstract": (((nodes.get(r["key"], {}) or {}).get("abstract") or "").strip()
+                         if emit_abstract else ""),
+            "venue": (nodes.get(r["key"], {}) or {}).get("venue", "") or "",
         })
 
     # default sort: starred first, then composite (leverage + cite boost) desc,
@@ -477,14 +552,17 @@ def main():
 
     payload = {
         "issues": [{"id": i["id"], "label": i.get("label", i["id"]),
-                    "question": i.get("question", ""), "core": i["id"] in CORE}
+                    "question": i.get("question", ""), "core": i["id"] in CORE,
+                    "weight": float(i.get("weight", 1.0))}
                    for i in issues],
         "rows": recs,
         "visible_min": VISIBLE_MIN, "star_min": STAR_MIN,
+        "abstracts": ABSTRACTS,   # which abstracts were embedded (all/visible/none)
         "n_visible": sum(1 for r in recs if r["visible"]),
         "n_hidden":  sum(1 for r in recs if not r["visible"]),
         "n_star":    sum(1 for r in recs if r["star"]),
         "n_no_abstract": sum(1 for r in recs if r.get("no_abstract")),
+        "n_abstract_embedded": sum(1 for r in recs if r.get("abstract")),
     }
 
     html_doc = (HTML_TEMPLATE
@@ -497,6 +575,32 @@ def main():
           f"{payload['n_visible']} visible (lev>={VISIBLE_MIN}), "
           f"{payload['n_hidden']} hidden | {payload['n_star']} starred "
           f"(lev>={STAR_MIN}) | {payload['n_no_abstract']} no-abstract (lev '--')")
+    _abs_note = {"all": "every paper", "visible": "visible rows only",
+                 "none": "none"}[ABSTRACTS]
+    print(f"  abstracts embedded: {_abs_note} "
+          f"({payload['n_abstract_embedded']} rows) — set ABSTRACTS=all|visible|none "
+          f"to change the file-size/searchability tradeoff")
+
+    # ── Leverage distribution + how the cutoffs resolved (tuning aid) ─────────────
+    # Shows where VISIBLE_MIN / STAR_MIN landed against the actual spread, so you can
+    # judge whether the top tier / shortlist feel right and pin different cutoffs
+    # (VISIBLE_MIN / STAR_MIN env) or percentiles (VISIBLE_PCTL / STAR_PCTL) if not.
+    if scored_levs:
+        qs = {p: round(_pctl(scored_levs, p), 1) for p in (10, 25, 50, 75, 90, 95, 100)}
+        print(f"\n  Leverage distribution over {len(scored_levs)} scored papers "
+              f"(weighted depth over {len(CORE)} core issues):")
+        print("    " + "  ".join(f"p{p}={qs[p]}" for p in (10, 25, 50, 75, 90, 95, 100)))
+        print(f"    VISIBLE_MIN = {VISIBLE_MIN}  [{vis_src}]  "
+              f"→ {payload['n_visible']} visible")
+        print(f"    STAR_MIN    = {STAR_MIN}  [{star_src}]  "
+              f"→ {payload['n_star']} starred")
+        if can_autoscale and VISIBLE_MIN_ENV is None and STAR_MIN_ENV is None:
+            print("    (auto-scaled to this corpus. To pin absolute cutoffs: "
+                  "VISIBLE_MIN=… STAR_MIN=…  |  to shift the percentiles: "
+                  "VISIBLE_PCTL=… STAR_PCTL=…)")
+        elif not can_autoscale:
+            print(f"    (too few scored papers to auto-scale; using fallback floors. "
+                  f"Pin cutoffs with VISIBLE_MIN=… STAR_MIN=… if needed.)")
 
 
 HTML_TEMPLATE = r"""<!DOCTYPE html>
@@ -520,6 +624,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .controls input[type=search]{ font:13px inherit; padding:5px 9px; border:1px solid var(--line);
               border-radius:6px; width:240px; }
   .controls .count { color:var(--muted); font-size:12px; margin-left:auto; }
+  .controls .absnote { color:var(--muted); font-size:11.5px; flex-basis:100%;
+                       font-style:italic; }
   .chip { font-size:12px; padding:3px 8px; border:1px solid var(--line); border-radius:20px;
           background:#fff; cursor:pointer; color:var(--muted); }
   .chip.on { background:var(--accent); color:#fff; border-color:var(--accent); }
@@ -532,6 +638,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .issuekey[open] > summary::before { content:"\25BE "; }
   .issuekey .grp { font-size:11px; text-transform:uppercase; letter-spacing:.04em;
               color:var(--muted); margin:12px 0 5px; }
+  .venue { display:block; font-size:11px; color:var(--muted); margin-top:2px; }
   .issuekey dl { display:grid; grid-template-columns:auto 1fr; gap:5px 10px; margin:0; }
   .issuekey dt { font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums;
               white-space:nowrap; }
@@ -673,6 +780,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   <label><input type="checkbox" id="staronly"> ★ priority only</label>
   <span id="issuechips"></span>
   <span class="count" id="count"></span>
+  <span class="absnote" id="absnote"></span>
 </div>
 
 <table id="tbl">
@@ -697,6 +805,18 @@ const LINK_TITLE = {
   philpapers_search:"PhilPapers search for this title — a results page, not a direct link"};
 document.getElementById("starmin").textContent = DATA.star_min;
 document.getElementById("hidct").textContent = DATA.n_hidden;
+// Abstract-scope note: when abstracts were embedded for visible rows only (or not
+// at all), text search can't match abstract content for the excluded rows. Tell
+// the user so a missed search hit isn't mistaken for an absent paper.
+(function(){
+  var n = document.getElementById("absnote");
+  if(!n) return;
+  if(DATA.abstracts === "visible"){
+    n.textContent = "abstracts embedded for visible rows only — search won't match hidden papers' abstracts (rebuild with ABSTRACTS=all for full-text search)";
+  } else if(DATA.abstracts === "none"){
+    n.textContent = "abstracts not embedded — search matches author/title/year only (rebuild with ABSTRACTS=all or ABSTRACTS=visible to search abstract text)";
+  }
+})();
 
 // ---- build header ----
 const baseCols = [
@@ -948,6 +1068,9 @@ function render(){
           inner+=`<details class="abs"${open}><summary>abstract</summary>`
                +`<div class="abstxt">${esc(r.abstract)}</div></details>`;
         }
+        if(r.venue){
+          inner+=`<span class="venue">${esc(r.venue)}</span>`;
+        }
         td.innerHTML=inner;
       } else if(c.k==="wt"){
         td.textContent = (r.wt==null? "" : r.wt);
@@ -1016,10 +1139,13 @@ function esc(s){ return s.replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt
   const coreIs = DATA.issues.filter(i=>CORE.includes(i.id));
   const otherIs= DATA.issues.filter(i=>!CORE.includes(i.id));
   function dl(list){
-    return "<dl>"+list.map(i=>
-      `<dt>${esc(i.id)}</dt><dd><b>${esc(i.label)}</b>`+
-      (i.question?` <span class="qn">— ${esc(i.question)}</span>`:"")+
-      `</dd>`).join("")+"</dl>";
+    return "<dl>"+list.map(i=>{
+      const wt = (i.weight!=null && i.weight!==1.0)
+        ? ` <span class="qn" title="leverage weight">(×${i.weight})</span>` : "";
+      return `<dt>${esc(i.id)}</dt><dd><b>${esc(i.label)}</b>${wt}`+
+        (i.question?` <span class="qn">— ${esc(i.question)}</span>`:"")+
+        `</dd>`;
+    }).join("")+"</dl>";
   }
   let h = `<div class="grp">Core issues (counted toward leverage)</div>`+dl(coreIs);
   if(otherIs.length) h += `<div class="grp">Related issues (shown, not counted)</div>`+dl(otherIs);

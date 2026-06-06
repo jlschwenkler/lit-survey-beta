@@ -40,7 +40,7 @@ USAGE:
 import json, os, re, time, argparse, collections, shutil, datetime
 import crawl_citation_graph as C
 from corpus_match import canonical_node, surname as node_surname
-from enrich_citedness import cite_tier_multiplier, CORE_ISSUES
+from enrich_citedness import cite_tier_multiplier, core_issue_ids
 
 FOLDER  = os.path.dirname(os.path.abspath(__file__))
 GRAPH   = os.path.join(FOLDER, "citation_graph.json")
@@ -62,10 +62,11 @@ def weighted_in_degree(edges):
         mat = json.load(open(MATRIX))
         fin = json.load(open(ISSUES))
         w = {i["id"]: float(i.get("weight", 1.0)) for i in fin.get("issues", [])}
+        core_issues = core_issue_ids(fin, mat)   # derived, not hardcoded
         for r in mat.get("rows", []):
             sc = r.get("scores", {}) or {}
             lev_by_key[r["key"]] = sum(w.get(i, 1.0) * int(sc.get(i, 0))
-                                       for i in CORE_ISSUES)
+                                       for i in core_issues)
     wtd = collections.defaultdict(float)
     raw = collections.Counter()
     for e in edges:

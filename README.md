@@ -116,8 +116,8 @@ review. Plan to edit/provide these:
 | **Project description** | `PROJECT_DESCRIPTION` in [`crawl_citation_graph.py`](crawl_citation_graph.py) | The prose the model uses to judge "in scope." The single most important knob. |
 | **Seed papers** | `SEED_PAPERS` in [`crawl_citation_graph.py`](crawl_citation_graph.py) | Your starting works (title, authors, any known DOI / OpenAlex / S2 id). |
 | **Keyword pre-filter** | the keyword regex in `crawl_citation_graph.py` | A cheap gate before paid LLM scoring. Tune it to your subfield's vocabulary. |
-| **Your issues** | `issues_final.json` (start from [`examples/issues_final.example.json`](examples/issues_final.example.json)) | The questions you score depth against. Build these from the issue-discovery pass, then hand-prune. |
-| **Table title + CORE list** | `HTML_TEMPLATE` and `CORE` in [`build_lit_table.py`](build_lit_table.py) | The `<title>`/`<h1>` and which issue IDs count toward "leverage." Update both when your issue IDs change (`grep -n CORE build_lit_table.py`). |
+| **Your issues + weights** | `issues_final.json` (start from [`examples/issues_final.example.json`](examples/issues_final.example.json)) | The questions you score depth against, each with a `weight` (default 1.0) and optional `core` flag. Build from the issue-discovery pass, then hand-prune. Leverage, the CORE set, and the filter chips all derive from this file automatically — no code edits needed. |
+| **Table title** | `PROJECT_NAME` env var | The table's `<title>`/`<h1>` (e.g. `export PROJECT_NAME="End-of-life AI ethics"`). |
 | **API keys** | environment | See below. |
 
 The shipped values are the **negligence example** — treat them as a worked
@@ -132,6 +132,10 @@ template to replace, not as defaults.
 | `SEMANTIC_SCHOLAR_API_KEY` | higher Semantic Scholar rate limits | optional |
 | `COURTLISTENER_API_KEY` | US case-law fetch (legal projects only) | optional |
 | `PROJECT_NAME` | sets the table's title/heading (e.g. `"End-of-life AI ethics"`) | optional |
+| `ABSTRACTS` | how many abstracts to embed in the output table — `all` (default), `visible`, or `none`; see [The output table](#stage-6--the-outputs-you-read) | optional |
+| `VISIBLE_MIN` / `STAR_MIN` | pin **absolute** leverage cutoffs for the visible set / star tier, overriding auto-scaling (e.g. `STAR_MIN=15`); see [Tuning the table](#stage-6--the-outputs-you-read) | optional |
+| `VISIBLE_PCTL` / `STAR_PCTL` | shift the **auto-scale** percentiles (defaults 75 / 95 → top quartile visible, top ~5% starred) | optional |
+| `SCORE_COST_PER_1K` | your $ per 1,000 LLM scoring calls — adds a rough dollar figure to the crawl's per-hop [cost forecast](#cost--tuning-read-before-your-first-crawl) | optional |
 
 ---
 
@@ -177,9 +181,21 @@ papers. It's a *method*, not a word list:
 The shipped negligence example is a good *structural* template (two genuinely
 independent, selective arms). Copy its shape; replace its terms for your topic.
 
-**Budgeting:** there's no built-in cost estimate yet (coming in a later release).
-Until then: run a **1-hop crawl first**, check the pass-through rate, and only widen
-to 2 hops once you've confirmed the filter isn't flooding.
+**Budgeting — the built-in forecast.** After each hop, the crawl prints what the
+*next* hop would cost, projected from the rates it just observed (fan-out per seed ×
+pre-filter pass-through). So the recommended, cost-safe workflow is:
+
+> Run **`--hops 1`** first. Read the printed forecast — it tells you roughly how many
+> papers a second hop would score (e.g. *"~12,000 paid scoring calls"*). Only if that
+> is acceptable, continue with **`--resume --hops 2`** (resume picks up exactly where
+> hop 1 left off — no re-scoring). The forecast also warns you if the pre-filter
+> pass-through is high (> 30%), the #1 sign your filter is too loose.
+
+The forecast counts **papers to score** (the thing that actually scales). If you know
+your current price, set `SCORE_COST_PER_1K` to your dollars per 1,000 scoring calls
+(e.g. `export SCORE_COST_PER_1K=0.50`) and the forecast adds a rough `$` figure too.
+It's an order-of-magnitude guide (a slight over-estimate, since later hops overlap
+the existing graph), meant to catch surprises before you spend — not an exact quote.
 
 > One more expensive step to know about: `rank_handpull.py` uses the stronger
 > ("smart"/Sonnet) model by default. Pass `--fast` to use the cheaper model if its
@@ -232,6 +248,18 @@ bibliography text into structured citations and resolve each to an ID →
 instrument — they surface in-field works the API crawl misses. Helpers:
 `detect_formats.py`, `extract_citations.py`.
 
+> **Which parser?** Run `detect_formats.py` first and follow the **`parser`** field
+> it prints for each paper, *not* the bare format label. A numbered *References*
+> section at the end of a paper (the BMJ / JAMA / J Med Ethics / J Med Philos norm)
+> is mined by `parse_bibliography.py`, even though its format reads as "endnotes";
+> page-bottom footnotes go through `parse_references.py`. Routing the wrong way
+> finds zero blocks and silently mines nothing.
+>
+> **This stage is cheap but not free.** Both parsers call the LLM (batched, fast
+> model) to structure each reference block — typically a few cents per paper. It's
+> small, but it *is* paid: the project's "never spend without surfacing it" rule
+> applies here too, just at small scale.
+
 **Stage 2 — Crawl the citation graph.** `crawl_citation_graph.py` is the heart of
 it: snowball expansion, hop by hop, fetching references (backward) and citing
 papers (forward) from Semantic Scholar (primary) and OpenAlex (fallback). Each new
@@ -263,6 +291,27 @@ schema: a JSON object with `issues` and `depth_scale` keys — see the example).
 `umap-learn` + `hdbscan` (clustering); skip it and write `issues_final.json` by
 hand if you'd rather not install them.
 
+> **Tuning clusters:** if `--min-cluster 6` (default) produces one or two giant
+> clusters, lower it (`--min-cluster 4` or `--min-cluster 3`). A giant cluster
+> (>50% of papers) means the setting is too coarse; the output is still useful
+> reading material, but lower the setting and re-read before curating. The
+> fine-grained output is typically more useful than the coarse one.
+>
+> **Issue IDs:** keep them short — single letters or two characters (`A`, `B`, `C`
+> or `Q1`, `Q2`). They appear as narrow column headers in the table; longer IDs
+> like `PPP1` overflow the column and look cluttered. The label and question carry
+> the human-readable meaning; the ID is just a stable key.
+
+> **`--min-cluster` is finicky — treat the output as raw material, not a verdict.**
+> HDBSCAN is sensitive: on a few-hundred-paper corpus the default `--min-cluster 6`
+> can dump 80% of the corpus into one giant blob (uselessly generic issues), while
+> dropping to `--min-cluster 4` can over-split into dozens of tiny clusters. There's
+> no single right setting — **sweep a couple of values and re-read.** 1–2 huge
+> clusters mean "lower `--min-cluster` and run again," not "these are your issues."
+> In practice the *finer* (more, smaller) clusters are the more useful reading aid;
+> the model's proposals are candidate questions for *you* to synthesize, not a
+> finished issue list.
+
 **Stage 3.5 — Consolidate duplicate nodes.** `consolidate_nodes.py` (dry-run, then
 `--commit`) merges fragmented duplicate nodes (same work under a DOI, an OpenAlex
 id, an S2 id…) **before** scoring, so each work is scored once. Conservative by
@@ -281,23 +330,103 @@ OpenAlex / Crossref — see NOTES.md), `enrich_ref_provenance.py`. Then
 `enrich_links.py` gives every paper without a DOI a verified URL so table titles
 click through. Run links **before** building the table.
 
-**Stage 5.6 / 6.6 / 6.7 — Abstract recovery.** Recover missing abstracts so
-title-only papers aren't systematically under-scored: automated indexes
-(OpenAlex / Crossref / Semantic Scholar) first, then publisher-landing scraping
-(`ingest_abstract_html.py`), then *optional* human page-saves. `rescue_by_citedness.py`
-revisits buried-but-cited works; `triage_no_abstract.py` auto-grabs what's left and
-produces a hand-pull worklist; `rank_handpull.py` ranks that worklist by title-fit
-so you only pull what's worth it. Re-score changed rows, then re-run Stage-5 +
-links + table.
+**Stage 5.6 / 6.6 / 6.7 — Abstract recovery (don't skip this).** Title-only papers
+are systematically under-scored (≈1.4 lower leverage), so a table built before this
+step quietly under-rates a fifth of the corpus. **Before you trust the ranking**,
+close the loop:
+
+1. **Automated recovery first** (free / cheap): automated indexes
+   (`backfill_abstracts.py` — OpenAlex / Crossref / Semantic Scholar), then
+   publisher-landing scraping (`ingest_abstract_html.py`), then `rescue_by_citedness.py`
+   (revisits buried-but-cited works the keyword filter froze).
+2. **Triage the remainder:** `triage_no_abstract.py` auto-grabs what's left and
+   produces a hand-pull worklist.
+   ⚠️ **This step makes paid LLM calls** (it Claude-scores every surfaced candidate),
+   despite the "dry-run" framing — the default run is the *expensive* half. Scores are
+   now cached to `triage_score_cache.json`, so `--write` reuses them instead of paying
+   twice; pass `--refresh` only if you want to re-score from scratch.
+3. **Rank what's worth pulling:** `rank_handpull.py` ranks the worklist by title-fit
+   so you pull only the high-priority papers.
+4. **Pull → ingest → re-score (the hand-pull round-trip):**
+   - `make_handpull_csv.py` → writes `handpull_fill.csv`, one row per work with an
+     empty `abstract` column and the `sibling_node_keys` paste targets.
+   - You paste the real abstracts you found into that `abstract` column.
+   - `ingest_handpull.py` reads the filled CSV, writes each abstract onto every node
+     of the work (snapshotting the graph into `_archive/` first), and emits
+     `handpull_ingest_keys.txt`.
+   - `ingest_handpull.py --prune-matrix` drops those rows from the matrix, then
+     `score_engagement.py --keys-file handpull_ingest_keys.txt --upgrade` re-scores them.
+
+Then re-run Stage-5 + links + table. (Skipping this is a real quality gap, not just
+polish: in testing, one hand-pulled abstract moved a paper from invisible/title-only
+to the **#1 starred** result.)
 
 **Stage 6 — The outputs you read.** `build_lit_table.py` builds
 `reading/literature_table.html`: inline abstracts, a fielded + Boolean search box,
-sortable by leverage. This is the shareable deliverable.
+sortable by leverage. This is the shareable deliverable — **one self-contained HTML
+file** with no server or build step, so you can email it or open it offline.
 
-**Stage 6.5 / 6.8 — Audits.** `sep_gap_check.py` checks coverage against an
-authoritative external bibliography (catches on-thesis works the keyword
-pre-filter froze — see NOTES.md). `audit_anomalies.py` (dry-run) surfaces
-duplicate / mislabeled clusters to hand-resolve late.
+That self-containedness comes from embedding the abstract text in the file, which is
+also the bulk of its size: on a big crawl the abstracts can push the file past
+several MB. The `ABSTRACTS` env var lets you choose the tradeoff:
+
+| `ABSTRACTS=` | What it embeds | Use when |
+|---|---|---|
+| `all` *(default)* | every paper's abstract | you want the whole corpus full-text-searchable in the self-contained file (the original design) |
+| `visible` | abstracts for above-the-fold (visible) rows only | you want a smaller, shareable file that still reads + searches the papers that matter; hidden rows still appear, just without an expandable abstract |
+| `none` | no abstract text | smallest file; titles + metadata only |
+
+Example: `ABSTRACTS=visible python3 build_lit_table.py`. The build prints how many
+abstracts it embedded, and when you choose `visible`/`none` the table itself shows a
+small note that in-page search won't match the abstracts that were left out. Re-run
+the build any time to switch modes — it's cheap (no LLM calls).
+
+#### Tuning the table — leverage, weights, and the visible/star tiers
+
+The table ranks papers by **leverage** = the weighted sum of how deeply a paper
+engages each *core* issue: `Σ (issue weight × engagement depth)` over the issues
+marked `core` in your `issues_final.json`. Two things you control:
+
+- **Issue weights.** Each issue has a `weight` in `issues_final.json` (default `1.0`).
+  Raise the weight on the issues most central to your thesis so deep engagement
+  *there* counts for more. (The negligence example weighted its three pivotal issues
+  at 1.5 — see `examples/issues_final.example.json`.) Set these *before* scoring.
+- **The visible set and the star tier.** "Visible" = the default-shown shortlist;
+  "★" = the short top tier. **By default these auto-scale to your own corpus** — star
+  ≈ the top 5% of scored papers, visible ≈ the top quartile — so a new topic gets a
+  sensibly-sized top tier without hand-tuning (this is what stops a borrowed cutoff
+  from marking 345 papers "visible" and 17 "starred" on the wrong-shaped corpus).
+
+After each build, the script prints the **leverage distribution** (percentiles) and
+exactly where the cutoffs landed, e.g.:
+
+```
+Leverage distribution over 477 scored papers (weighted depth over 9 core issues):
+  p10=2.0  p25=5.0  p50=8.5  p75=12.5  p90=15.0  p95=16.5  p100=20.5
+  VISIBLE_MIN = 12.5  [auto: top 25% (p75)]  → 135 visible
+  STAR_MIN    = 16.5  [auto: top 5% (p95)]  → 15 starred
+```
+
+If the top tier feels too big or too small, adjust and re-build (cheap, no LLM calls):
+
+- **Shift the percentiles:** `STAR_PCTL=97 VISIBLE_PCTL=80 python3 build_lit_table.py`.
+- **Pin absolute cutoffs** (disables auto-scale for that threshold):
+  `VISIBLE_MIN=10 STAR_MIN=16 python3 build_lit_table.py`.
+
+(There is also a hand-curated `STAR_HAND_KEEP` set in `build_lit_table.py` for the
+rare foundational work the citedness gate overshoots — empty by default; add your own
+paper keys only if you need to.)
+
+**Stage 6.5 / 6.8 — Audits (the closing QA pass — don't end at the first table).**
+A stage-driven run reaches a finished-looking table well before these run, so it's
+easy to stop too early. Before you treat the table as done, make a pass:
+`sep_gap_check.py` checks coverage against an authoritative external bibliography
+(catches on-thesis works the keyword pre-filter froze — see NOTES.md);
+`audit_anomalies.py` (dry-run) surfaces duplicate / mislabeled clusters to
+hand-resolve late; `consolidate_nodes.py` catches fragmented duplicates that slipped
+through; `overlooked_texts.py` reports cited-but-absent works. None are optional
+polish — they're the difference between a confident-looking table and a trustworthy
+one.
 
 **Side track — case law (legal projects only).** `fetch_caselaw.py` (CourtListener),
 `make_case_pdf.py`, `fetch_pdfs.py`. Skip entirely for non-legal topics.

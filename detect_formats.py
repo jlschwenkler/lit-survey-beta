@@ -11,7 +11,15 @@ Format types:
   bluebook      - law review Bluebook footnotes
   unknown       - could not determine
 
-Also records: endnote_start_page, has_bibliography, noise_level (low/medium/high)
+Also records: endnote_start_page, has_bibliography, noise_level (low/medium/high),
+and a `parser` field naming WHICH mining script to run. That last field matters:
+a format LABEL is ambiguous about which parser handles it. In particular,
+"endnotes" (a numbered References/Bibliography section at the END of a paper —
+the BMJ / JAMA / J Med Ethics / J Med Philos norm) is parsed by
+`parse_bibliography.py` (the References-section path), NOT by `parse_references.py`
+(the page-bottom footnote/endnote parser). Routing such papers to
+parse_references.py finds zero blocks and silently mines nothing. The `parser`
+field removes that guesswork — follow it, not the bare format name.
 """
 
 import re, os, json
@@ -139,9 +147,26 @@ def detect_format(stem: str, text: str) -> dict:
 
     page_count = text.count("--- Page ")
 
+    # Which mining script actually handles this format? The format label alone is
+    # ambiguous (see module docstring): both "endnotes" (end-of-paper numbered
+    # References section) and "intext" (author-date with a bibliography) are mined
+    # by parse_bibliography.py, while the page-bottom footnote styles go through
+    # parse_references.py. A standalone numbered References/Bibliography heading is
+    # the strongest tell for the bibliography path even when footnote scores are
+    # high, so check for it explicitly.
+    has_ref_section = bool(re.search(
+        r"(?im)^[ \t]*(References|Bibliography|Works Cited)[ \t]*$", text))
+    if best_format in ("endnotes", "intext") or has_ref_section:
+        parser = "parse_bibliography.py"
+    elif best_format in ("footnote_ssrn", "footnote_cup", "bluebook"):
+        parser = "parse_references.py"
+    else:
+        parser = "unknown — try parse_bibliography.py first, then parse_references.py"
+
     return {
         "stem": stem,
         "format": best_format,
+        "parser": parser,
         "confidence": "high" if best_score >= 40 else "medium" if best_score >= 20 else "low",
         "mixed_signals": is_mixed,
         "scores": scores,
@@ -164,12 +189,15 @@ def main():
         text = open(path, encoding="utf-8").read()
         meta = detect_format(stem, text)
         results[stem] = meta
-        print(f"  {stem[:55]:<55}  →  {meta['format']:<16} ({meta['confidence']}, noise={meta['noise_level']})")
+        print(f"  {stem[:48]:<48}  →  {meta['format']:<14} "
+              f"({meta['confidence']})  run: {meta['parser']}")
 
     with open(META_PATH, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
 
     print(f"\nMetadata written to: {META_PATH}")
+    print("NOTE: run the script named in each row's `parser` field — the format "
+          "label alone does not tell you which mining script to use.")
 
 
 if __name__ == "__main__":

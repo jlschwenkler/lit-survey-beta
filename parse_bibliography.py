@@ -53,11 +53,26 @@ OUP_BOILERPLATE = re.compile(
     r"|Find at .*|p\.\s*\d+)\s*$"
 )
 
+# Running page headers/footers in two-column journal PDFs (BMC, BMJ, Springer,
+# \u2026) get interleaved into the references and can be swallowed into an entry,
+# corrupting it (and, before the parse_batch fix, sinking the whole batch). Strip
+# the common shapes: "Page 10 of 10", "Page 10 -- ...", and journal running
+# footers like "Benzinger et al. BMC Medical Ethics (2024) 25:78".
+RUNNING_FURNITURE = re.compile(
+    r"(?im)^\s*(?:"
+    r"Page\s+\d+(?:\s+of\s+\d+)?\b.*"                       # "Page 10 of 10 ..."
+    r"|.{0,40}\bet al\.?\s+.{0,60}\(\d{4}\)\s*\d+\s*:\s*\d+\s*"  # journal footer
+    r")$"
+)
+
 
 def strip_oup_boilerplate(text):
-    """Remove OUP per-entry link labels, page markers, and PUA glyphs."""
+    """Remove OUP per-entry link labels, page markers, running headers/footers,
+    and PUA glyphs \u2014 anything page furniture that would otherwise be swallowed
+    into a reference entry."""
     text = re.sub("[\uE000-\uF8FF]", " ", text)  # strip Unicode private-use glyphs
     text = OUP_BOILERPLATE.sub("", text)
+    text = RUNNING_FURNITURE.sub("", text)
     return text
 
 
@@ -75,13 +90,56 @@ def extract_refs_section(text):
     return tail.strip()
 
 
-def split_entries(refs):
-    """Split an author-date reference list into individual entries.
+def _split_numbered_entries(refs):
+    """Split a NUMBERED (Vancouver-style) reference list into entries.
 
-    Heuristic: a new entry starts at a line beginning with a capitalized surname
-    followed by a comma/initial, OR an unindented line after a hanging indent.
-    We rejoin wrapped lines, then split on the author-year start pattern.
+    Format common in medical / bioethics journals (BMJ, JAMA, J Med Ethics,
+    J Med Philos, AJOB): each entry opens with a reference number, optionally
+    tab/space-indented, then an author surname + initials —
+        "1  Orentlicher D. Advance Medical Directives. JAMA 1990;263:2365-7."
+    The author-date split_entries() can't see these (no "Surname, X." start), so
+    we split on the leading number that begins a new entry and rejoin wrapped
+    lines in between. Returns [] if the list doesn't look numbered, so the caller
+    can fall back to the author-date heuristic.
     """
+    refs = re.sub(r"-\n", "", refs)            # de-hyphenate line breaks
+    # A new entry starts at: line start, optional leading whitespace, a 1-3 digit
+    # number, then whitespace, then a capitalized author surname. Using a split on
+    # this boundary keeps the number-less continuation lines attached.
+    START = re.compile(
+        r"(?m)^[ \t\x07]*(\d{1,3})[ \t\x07]+(?=[A-ZÀ-Þ])"
+    )
+    marks = list(START.finditer(refs))
+    # Require a real numbered list: several entries, and numbers that mostly run
+    # consecutively from 1 (guards against stray "2024" lines tripping the regex).
+    nums = [int(m.group(1)) for m in marks]
+    if len(nums) < 3 or nums[0] > 2 or sum(
+        1 for a, b in zip(nums, nums[1:]) if b == a + 1
+    ) < len(nums) * 0.6:
+        return []
+    entries = []
+    for i, m in enumerate(marks):
+        start = m.end()
+        end = marks[i + 1].start() if i + 1 < len(marks) else len(refs)
+        body = re.sub(r"\s+", " ", refs[start:end]).strip()
+        if body:
+            entries.append(body)
+    return [e for e in entries if re.search(r"\b(19|20)\d{2}\b", e)]
+
+
+def split_entries(refs):
+    """Split a reference list into individual entries.
+
+    Tries the NUMBERED (Vancouver) format first — common in medical/bioethics
+    journals — then falls back to the author-date heuristic below.
+
+    Author-date heuristic: a new entry starts at a line beginning with a
+    capitalized surname followed by a comma/initial, OR an unindented line after a
+    hanging indent. We rejoin wrapped lines, then split on the author-year start.
+    """
+    numbered = _split_numbered_entries(refs)
+    if numbered:
+        return numbered
     # collapse hard-wrapped lines into spaces, but keep paragraph-ish breaks
     refs = re.sub(r"-\n", "", refs)            # de-hyphenate line breaks
     refs = re.sub(r"\n+", "\n", refs)
@@ -136,15 +194,43 @@ garbled or not a real citation, set type "other" and copy what you can."""
 
 
 def parse_batch(entries):
+    """Parse a batch of reference strings into structured records via the LLM.
+
+    Resilient to a malformed JSON response: rather than marking the WHOLE batch
+    parse-error (which silently zeroed an entire paper's references when one
+    layout artifact derailed the model's JSON), we split the batch in half and
+    retry recursively, down to per-entry. That way a single bad entry loses only
+    itself; its well-formed neighbours are salvaged. Always returns a list the
+    same length as `entries`, so the caller's zip() stays aligned.
+    """
+    if not entries:
+        return []
     numbered = "\n".join(f"{i+1}. {e}" for i, e in enumerate(entries))
     try:
         txt = call_model(
             system=BIB_SYSTEM, user=numbered, model="fast", max_tokens=4000,
         )
         txt = re.sub(r"^```(?:json)?\n?", "", txt); txt = re.sub(r"\n?```$", "", txt)
-        return json.loads(txt)
+        parsed = json.loads(txt)
+        if isinstance(parsed, list) and len(parsed) == len(entries):
+            return parsed
+        # length mismatch — treat like a parse failure so we fall through to salvage
+        raise ValueError(f"expected {len(entries)} records, got "
+                         f"{len(parsed) if isinstance(parsed, list) else type(parsed).__name__}")
     except Exception as e:
-        return [{"type": "parse-error", "note": str(e)[:80]} for _ in entries]
+        if len(entries) == 1:
+            # can't subdivide further — this single entry is the bad one
+            print(f"    ⚠ entry failed to parse, skipping: {str(e)[:60]}")
+            return [{"type": "parse-error", "note": str(e)[:80]}]
+        # subdivide and retry: a bad entry should not sink its batch-mates
+        print(f"    ⚠ batch of {len(entries)} failed JSON ({str(e)[:40]}); "
+              f"retrying in halves to salvage the good entries")
+        mid = len(entries) // 2
+        time.sleep(0.2)
+        left = parse_batch(entries[:mid])
+        time.sleep(0.2)
+        right = parse_batch(entries[mid:])
+        return left + right
 
 
 def main():

@@ -70,11 +70,20 @@ OUTPUTS
   - triage_handpull_keys.txt       — node keys on the worklist (one per line).
   - triage_recovered_keys.txt       — node keys that gained an abstract + a fresh
                                       score >= threshold (feed to score_engagement).
-  (Writes into citation_graph.json only with --write; default is DRY-RUN.)
+  - triage_score_cache.json         — per-key {abstract, score, reason} cache.
+
+COST NOTE — the default run is a PREVIEW, not "free":
+  The default (no --write) still fetches an abstract and Claude-scores EVERY
+  surfaced candidate — that is the paid step. It just doesn't mutate the graph.
+  The verdicts are cached to triage_score_cache.json, so the follow-up --write
+  REUSES them (no re-scoring, no second charge) and the preview's counts exactly
+  match what --write persists. Pass --refresh to discard the cache and re-score.
+  (Writes into citation_graph.json only with --write.)
 
 USAGE
-  python3 triage_no_abstract.py            # dry-run report
-  python3 triage_no_abstract.py --write    # apply grabs+rescores
+  python3 triage_no_abstract.py            # PREVIEW: score + cache, no graph write
+  python3 triage_no_abstract.py --write    # apply grabs+rescores (reuses cache, free)
+  python3 triage_no_abstract.py --refresh  # ignore cache, re-score (paid)
   python3 triage_no_abstract.py --limit 40                              # smoke test
   # after a --write run, admit the recovered papers into the matrix:
   python3 score_engagement.py --keys-file triage_recovered_keys.txt
@@ -139,6 +148,13 @@ MATRIX_PATH    = os.path.join(FOLDER, "engagement_matrix.json")
 REPORT_PATH    = os.path.join(FOLDER, "triage_no_abstract_report.md")
 HANDPULL_PATH  = os.path.join(FOLDER, "triage_handpull_keys.txt")
 RECOVERED_PATH = os.path.join(FOLDER, "triage_recovered_keys.txt")
+# Per-key cache of {abstract, abs_src, score, reason} from the most recent run.
+# This is what makes the dry-run a real preview AND stops --write from re-paying:
+# the expensive half (fetch abstract + Claude-score every candidate) runs ONCE,
+# is cached here, and a later --write reuses the cached verdicts verbatim instead
+# of re-fetching and re-scoring. Mirrors crawl_citation_graph.py's --resume
+# checkpoint discipline. Delete this file to force a fresh (paid) re-score.
+CACHE_PATH     = os.path.join(FOLDER, "triage_score_cache.json")
 ARCHIVE        = os.path.join(FOLDER, "_archive")
 
 EMAIL = os.environ.get("CROSSREF_MAILTO", "you@example.com")
@@ -164,8 +180,11 @@ def link_for(key, n):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--write", action="store_true",
-                    help="apply abstract grabs + re-scores to citation_graph.json "
-                         "(default: dry-run, report only)")
+                    help="apply abstract grabs + re-scores to citation_graph.json. "
+                         "Default is PREVIEW: it still fetches + Claude-scores every "
+                         "candidate (this is the paid step) and caches the result, "
+                         "but does not mutate the graph. A subsequent --write reuses "
+                         "the cache for free.")
     ap.add_argument("--threshold", type=int, default=4,
                     help="min relevance score to enter the matrix (default 4, "
                          "matches the crawl)")
@@ -175,7 +194,24 @@ def main():
                     help="min in-corpus in-degree for the CITEDNESS signal (default 3)")
     ap.add_argument("--limit", type=int, default=None,
                     help="cap candidates scored (smoke test)")
+    ap.add_argument("--refresh", action="store_true",
+                    help="ignore the score cache and re-fetch + re-score every "
+                         "candidate (paid). Default reuses triage_score_cache.json "
+                         "so the dry-run preview and the --write commit agree and "
+                         "you don't pay twice.")
     args = ap.parse_args()
+
+    # Load the per-key score/abstract cache from a prior run (see CACHE_PATH note).
+    # Reusing it makes --write free (no re-score) and makes the dry-run an exact
+    # preview of what --write will persist. --refresh discards it.
+    cache = {}
+    if os.path.exists(CACHE_PATH) and not args.refresh:
+        try:
+            cache = json.load(open(CACHE_PATH))
+            print(f"Loaded {len(cache)} cached scores from "
+                  f"{os.path.basename(CACHE_PATH)} (use --refresh to re-score).")
+        except Exception:
+            cache = {}
 
     graph  = json.load(open(GRAPH_PATH))
     nodes  = graph["nodes"]
@@ -246,28 +282,44 @@ def main():
     print(f"  S2 batch returned {len(B.S2_LOOKUP)} abstracts")
 
     recovered, handpull, errors = [], [], 0
+    n_cached_hits, n_scored = 0, 0
     for i, (k, n) in enumerate(candidates, 1):
         title = n.get("title") or ""
         if not title:
             continue
         deg = indeg.get(k, 0)
 
-        try:
-            # 1. try to grab an abstract (network; isolated so one stall/error
-            #    can't wedge or crash the whole run)
-            abs, src = B.resolve_abstract(n)
-        except Exception as e:
-            abs, src, errors = None, None, errors + 1
-            if errors <= 10:
-                print(f"    [fetch error #{errors}] {title[:50]}: "
-                      f"{type(e).__name__}")
-        got_abs = bool(abs and B.good(abs))
+        cached = cache.get(k)
+        if cached is not None:
+            # reuse the prior run's fetch + score — no network, no paid call
+            abs = cached.get("abstract") or None
+            src = cached.get("abs_src")
+            score = cached.get("score", 1)
+            reason = cached.get("reason", "")
+            got_abs = bool(cached.get("got_abs"))
+            n_cached_hits += 1
+        else:
+            try:
+                # 1. try to grab an abstract (network; isolated so one stall/error
+                #    can't wedge or crash the whole run)
+                abs, src = B.resolve_abstract(n)
+            except Exception as e:
+                abs, src, errors = None, None, errors + 1
+                if errors <= 10:
+                    print(f"    [fetch error #{errors}] {title[:50]}: "
+                          f"{type(e).__name__}")
+            got_abs = bool(abs and B.good(abs))
 
-        # 2. score relevance — from the fetched abstract if any, else title-only
-        try:
-            score, reason = C.claude_score(title, abs if got_abs else "")
-        except Exception as e:
-            score, reason = 1, f"score error: {type(e).__name__}"
+            # 2. score relevance — from the fetched abstract if any, else title-only
+            try:
+                score, reason = C.claude_score(title, abs if got_abs else "")
+            except Exception as e:
+                score, reason = 1, f"score error: {type(e).__name__}"
+            n_scored += 1
+            # cache this verdict so --write reuses it and we never re-pay
+            cache[k] = {"abstract": abs if got_abs else "", "abs_src": src,
+                        "score": score, "reason": reason, "got_abs": got_abs}
+
         title_pass_kw = C.keyword_prefilter(title, "")
 
         # 3. OR-rule: surface if title-signal OR citedness-signal fires.
@@ -287,7 +339,8 @@ def main():
             "key": k, "title": title, "year": n.get("year"),
             "venue": n.get("venue") or "", "indegree": deg,
             "score": score, "reason": reason, "got_abs": got_abs,
-            "abs_src": src, "link": link_for(k, n),
+            "abs_src": src, "abs_text": abs if got_abs else "",
+            "link": link_for(k, n),
             "title_signal": title_signal, "cite_signal": cite_signal,
         }
 
@@ -302,6 +355,17 @@ def main():
             print(f"  [{i}/{len(candidates)}] surfaced: "
                   f"{len(recovered)} recovered, {len(handpull)} hand-pull")
         time.sleep(0.05)
+
+    # persist the cache so a follow-up --write (or re-run) reuses these verdicts
+    # instead of re-fetching + re-paying. This is the fix for the double-spend and
+    # the non-deterministic dry-run/commit mismatch.
+    try:
+        json.dump(cache, open(CACHE_PATH, "w"), ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"  (warning: could not write score cache: {type(e).__name__})")
+    print(f"\nScoring: {n_scored} paid Claude call(s) this run, "
+          f"{n_cached_hits} reused from cache. "
+          f"Cache -> {os.path.basename(CACHE_PATH)} ({len(cache)} keys).")
 
     # rank both lists: citedness first, then score, then title
     keyf = lambda r: (-r["indegree"], -r["score"], r["title"].lower())
@@ -318,7 +382,13 @@ def main():
         print(f"\nSnapshot -> {os.path.relpath(snap, FOLDER)}")
         for r in recovered:
             k = r["key"]; n = nodes[k]
-            abs_text, src = B.resolve_abstract(n)   # re-fetch the winning text
+            # reuse the abstract from the scored run (cache), not a fresh fetch —
+            # re-fetching could return different/empty text and would waste calls.
+            cached = cache.get(k) or {}
+            abs_text, src = cached.get("abstract") or r.get("abs_text"), r.get("abs_src")
+            if not (abs_text and B.good(abs_text)):
+                # fall back to a fetch only if the cache somehow lacks the text
+                abs_text, src = B.resolve_abstract(n)
             if not (abs_text and B.good(abs_text)):
                 continue
             n["abstract"] = abs_text
@@ -394,7 +464,10 @@ def main():
     print(f"Worklist-> {os.path.basename(HANDPULL_PATH)} ({len(handpull)} keys)")
     print(f"Recovered keys-> {os.path.basename(RECOVERED_PATH)} ({len(wrote_recovered)} keys)")
     if not args.write:
-        print("\nDRY-RUN: no graph changes. Re-run with --write to apply grabs+rescores.")
+        print("\nPREVIEW: scores computed + cached, but no graph changes written. "
+              "Re-run with --write to apply — it REUSES the cached scores above "
+              "(no re-scoring, no extra cost) and persists exactly the "
+              f"{len(wrote_recovered)} matrix entries previewed here.")
 
 
 if __name__ == "__main__":

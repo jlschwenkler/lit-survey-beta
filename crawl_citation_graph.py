@@ -514,7 +514,12 @@ def main():
                     "papers as hop 1 (and each scored paper is a paid LLM call). For "
                     "a focused topic with good seeds, hop 1 alone usually captures "
                     "most of the highest-leverage works; add hop 2 only when you "
-                    "deliberately want broad coverage and accept the cost.")
+                    "deliberately want broad coverage and accept the cost. After each "
+                    "hop the crawl prints a FORECAST of what the next hop would cost "
+                    "(projected papers to score), so the recommended workflow is: run "
+                    "--hops 1, read the forecast, then --resume --hops 2 only if the "
+                    "projected cost is acceptable. Set SCORE_COST_PER_1K to your $ per "
+                    "1,000 scoring calls to get a rough dollar figure in that forecast.")
     parser.add_argument("--hops",      type=int, default=1,
                         help="Expansion hops (DEFAULT 1). 1 = core literature, cheap; "
                              "2 = broad coverage, ~10x the scored papers and cost. "
@@ -678,6 +683,11 @@ def main():
 
         next_hop_seeds = []
         new_nodes_this_hop = 0
+        # ── Forecast counters (this hop) — feed the next-hop cost projection ──────
+        seeds_expanded   = 0   # seeds actually expanded this hop
+        cand_seen        = 0   # raw neighbor records fetched (incl. duplicates)
+        cand_new         = 0   # neighbors that were NEW nodes (not already in graph)
+        paid_calls       = 0   # NEW nodes that passed the pre-filter → paid LLM score
 
         for i, seed_key in enumerate(seeds_this_hop, 1):
             seed_rec = nodes[seed_key]
@@ -686,6 +696,8 @@ def main():
 
             candidates = fetch_neighbors(seed_rec, direction="both")
             print(f"    → {len(candidates)} neighbors fetched")
+            seeds_expanded += 1
+            cand_seen += len(candidates)
 
             new_this_seed = 0
             for cand in candidates:
@@ -695,6 +707,12 @@ def main():
                     edges.append({"from": seed_key, "to": ckey, "hop": hop})
                     continue
 
+                # A NEW node: it incurs a paid scoring call ONLY if it clears the
+                # keyword pre-filter (the rest are rejected for free). Count that here
+                # so the forecast uses the SAME gate the crawl uses.
+                cand_new += 1
+                if keyword_prefilter(cand.get("title",""), cand.get("abstract","")):
+                    paid_calls += 1
                 passes, score, reason = score_candidate(cand, args.threshold, scores)
                 cand["hop"] = hop
                 nodes[ckey] = cand
@@ -721,6 +739,53 @@ def main():
 
         print(f"\nHop {hop} complete: {new_nodes_this_hop} new nodes, "
               f"{len(next_hop_seeds)} pass threshold for next hop")
+
+        # ── Next-hop cost forecast (free; uses THIS hop's observed behavior) ──────
+        # The expensive thing is PAID scoring calls (one per NEW node that clears the
+        # keyword pre-filter). This hop measured three rates we can extrapolate:
+        #   fan-out   = new nodes discovered per seed expanded
+        #   pass-rate = fraction of new nodes that cleared the pre-filter (got paid)
+        # The next hop expands `len(next_hop_seeds)` survivors, so:
+        #   projected new nodes  ≈ next_seeds × fan-out
+        #   projected paid calls ≈ projected new nodes × pass-rate
+        # Caveats (stated to the user): later hops overlap the existing graph MORE, so
+        # the real new-node count is usually LOWER than this linear projection — i.e.
+        # the forecast is an UPPER-ish bound. It's meant to catch order-of-magnitude
+        # surprises ("hop 2 would score ~12,000 papers"), not to be exact.
+        if seeds_expanded and cand_new:
+            fanout    = cand_new / seeds_expanded
+            pass_rate = paid_calls / cand_new
+            print(f"\n  ── This hop's economics ──")
+            print(f"    seeds expanded: {seeds_expanded} | new nodes: {cand_new} "
+                  f"(~{fanout:.0f}/seed) | paid LLM scores: {paid_calls} "
+                  f"(pre-filter pass-through {pass_rate*100:.0f}%)")
+            if pass_rate > 0.30:
+                print(f"    ⚠ pass-through {pass_rate*100:.0f}% is high (aim ~20%). A "
+                      f"loose keyword pre-filter is the #1 cost driver — consider "
+                      f"tightening it (see README 'Tuning the pre-filter').")
+            n_next = len(next_hop_seeds)
+            if hop < args.hops and n_next:
+                proj_new  = n_next * fanout
+                proj_paid = proj_new * pass_rate
+                print(f"\n  ── Forecast for hop {hop+1} (you have it queued) ──")
+                print(f"    {n_next} survivors × ~{fanout:.0f} new/seed "
+                      f"≈ {proj_new:,.0f} new nodes → ~{proj_paid:,.0f} PAID scoring "
+                      f"calls (upper-ish bound; real is usually lower due to overlap).")
+                _cost = float(os.environ.get("SCORE_COST_PER_1K", "0") or 0)
+                if _cost > 0:
+                    print(f"    ≈ ${proj_paid/1000*_cost:,.2f} at "
+                          f"SCORE_COST_PER_1K=${_cost:.3f} (your stated rate).")
+                else:
+                    print(f"    (set SCORE_COST_PER_1K to your $ per 1,000 scoring "
+                          f"calls for a rough dollar figure.)")
+            elif hop >= args.hops and n_next:
+                # We're stopping here, but the user might be tempted to add a hop.
+                proj_new  = n_next * fanout
+                proj_paid = proj_new * pass_rate
+                print(f"\n  ── If you added one more hop (you did NOT request it) ──")
+                print(f"    {n_next} survivors × ~{fanout:.0f} new/seed "
+                      f"≈ {proj_new:,.0f} new nodes → ~{proj_paid:,.0f} more PAID "
+                      f"scoring calls. Re-run with --resume --hops {hop+1} to do it.")
 
         # Mark hop as complete
         graph_data = {

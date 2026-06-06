@@ -70,9 +70,13 @@ ISSUES_PATH = os.path.join(FOLDER, "issues_final.json")  # per-issue leverage we
 # citedness bonus; this is in-network only. (The interaction of this signal with
 # the composite cite boost is a deliberately deferred design question.)
 #
-# Tier multiplier on the CITING paper's leverage (chosen 2026-06-01 after a
-# side-by-side vs additive 1+0.15*lev — same ordering, cleaner integers):
-CORE_ISSUES = ["A1", "A2", "A3", "A4", "A5a", "A5b", "A6"]
+# CORE_ISSUES (which issue ids count toward a citer's leverage) is DERIVED at runtime
+# from issues_final.json — an issue counts unless it sets "core": false — exactly as
+# build_lit_table.py derives its CORE. (A hardcoded A1..A6 list silently summed to 0
+# on any non-negligence topic, breaking the citedness weighting + the rescue triage.)
+# See main(). The tier thresholds below are heuristic multipliers on the CITING
+# paper's leverage (chosen 2026-06-01 vs additive 1+0.15*lev — same ordering, cleaner
+# integers); they bias citer WEIGHTING only, they don't gate inclusion.
 STAR_LEV    = 15.0   # citer leverage >= this  -> 3x
 VISIBLE_LEV = 9.0    # citer leverage >= this  -> 2x   (else / off-matrix -> 1x)
 
@@ -80,6 +84,23 @@ def cite_tier_multiplier(citer_leverage):
     if citer_leverage >= STAR_LEV:    return 3.0
     if citer_leverage >= VISIBLE_LEV: return 2.0
     return 1.0
+
+
+def core_issue_ids(issues_final, matrix=None):
+    """The issue ids that count toward leverage, DERIVED from the project's own
+    issues_final.json (an issue counts unless it sets "core": false) — the same rule
+    build_lit_table.py uses, so all three stay topic-agnostic. Falls back to every id
+    present in the matrix scores when issues_final is absent/empty. Shared so
+    enrich_citedness and rescue_by_citedness can't drift apart.
+        issues_final : the parsed issues_final.json dict (or None).
+        matrix       : the parsed engagement_matrix.json dict (or None), used only
+                       for the fallback id set."""
+    ids = [i["id"] for i in (issues_final or {}).get("issues", [])
+           if bool(i.get("core", True))]
+    if ids:
+        return ids
+    rows = (matrix or {}).get("rows", []) if matrix else []
+    return sorted({k for r in rows for k in (r.get("scores") or {})})
 
 EMAIL         = os.environ.get("CROSSREF_MAILTO", "you@example.com")
 CURRENT_YEAR  = 2026
@@ -223,18 +244,19 @@ def main():
     # leverage of each matrix paper-IDENTITY (so a citing node's weight is its
     # work's engagement tier). Weights come from issues_final.json, the same
     # authoritative source build_lit_table.py reads.
-    issue_w = {}
-    if os.path.exists(ISSUES_PATH):
-        fin = json.load(open(ISSUES_PATH))
-        issue_w = {i["id"]: float(i.get("weight", 1.0)) for i in fin.get("issues", [])}
+    fin = json.load(open(ISSUES_PATH)) if os.path.exists(ISSUES_PATH) else {}
+    issue_w = {i["id"]: float(i.get("weight", 1.0)) for i in fin.get("issues", [])}
     wt_of = lambda iid: issue_w.get(iid, 1.0)
+    # Issue ids that count toward leverage — DERIVED from the project's own issues
+    # (core unless explicitly core:false), NOT a hardcoded list (see core_issue_ids).
+    core_issues = core_issue_ids(fin, mat)
     lev_by_id = {}
     for r in mat["rows"]:
         pid = key_to_id.get(r["key"])
         if pid is None:
             continue
         sc = r.get("scores", {}) or {}
-        lev = sum(wt_of(i) * int(sc.get(i, 0)) for i in CORE_ISSUES)
+        lev = sum(wt_of(i) * int(sc.get(i, 0)) for i in core_issues)
         # if several rows map to one identity, keep the max leverage
         lev_by_id[pid] = max(lev_by_id.get(pid, 0.0), lev)
 
