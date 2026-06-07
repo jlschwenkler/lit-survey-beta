@@ -60,11 +60,11 @@ fresh project folder** — you swap in your topic, seeds, and issues.
 Three complete pipeline runs on real subliteratures — each folder contains the
 ranked HTML table and the `issues_final.json` that drove the scoring:
 
-| Topic | Live table | Issues |
+| Topic | Links | Issues |
 |---|---|---|
-| AI / Patient Preference Predictors | [▶ open table](https://jlschwenkler.github.io/lit-survey-beta/examples/sample_output/ppp/literature_table.html) · [issues_final.json](examples/sample_output/ppp/issues_final.json) | 7 (A–G) — medical ethics, autonomy, surrogate decision-making |
-| Practical & non-observational knowledge of action | [▶ open table](https://jlschwenkler.github.io/lit-survey-beta/examples/sample_output/practical-knowledge/literature_table.html) · [issues_final.json](examples/sample_output/practical-knowledge/issues_final.json) | 6 (A1–A6) — philosophy of action, Anscombe, knowledge-how |
-| Negligence in ethics and law | [▶ open table](https://jlschwenkler.github.io/lit-survey-beta/examples/sample_output/negligence/literature_table.html) · [issues_final.json](examples/sample_output/negligence/issues_final.json) | 7 (A1–A5b) — culpability, reasonable-person standard, mens rea |
+| AI / Patient Preference Predictors | [live table](https://jlschwenkler.github.io/lit-survey-beta/examples/sample_output/ppp/literature_table.html) — [issues_final.json](examples/sample_output/ppp/issues_final.json) | 7 (A–G) — medical ethics, autonomy, surrogate decision-making |
+| Practical & non-observational knowledge of action | [live table](https://jlschwenkler.github.io/lit-survey-beta/examples/sample_output/practical-knowledge/literature_table.html) — [issues_final.json](examples/sample_output/practical-knowledge/issues_final.json) | 6 (A1–A6) — philosophy of action, Anscombe, knowledge-how |
+| Negligence in ethics and law | [live table](https://jlschwenkler.github.io/lit-survey-beta/examples/sample_output/negligence/literature_table.html) — [issues_final.json](examples/sample_output/negligence/issues_final.json) | 7 (A1–A5b) — culpability, reasonable-person standard, mens rea |
 
 Each table is fully live — search box, sortable columns, inline abstracts, issue
 filter chips. The `issues_final.json` alongside each one shows the single file
