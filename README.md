@@ -60,15 +60,15 @@ fresh project folder** — you swap in your topic, seeds, and issues.
 Three complete pipeline runs on real subliteratures — each folder contains the
 ranked HTML table and the `issues_final.json` that drove the scoring:
 
-| Topic | Issues | Papers |
+| Topic | Live table | Issues |
 |---|---|---|
-| [AI / Patient Preference Predictors](examples/sample_output/ppp/) | 7 (A–G) — medical ethics, autonomy, surrogate decision-making | 320 |
-| [Practical & non-observational knowledge of action](examples/sample_output/practical-knowledge/) | 6 (A1–A6) — philosophy of action, Anscombe, knowledge-how | ~200 |
-| [Negligence in ethics and law](examples/sample_output/negligence/) | 7 (A1–A5b) — culpability, reasonable-person standard, mens rea | ~470 |
+| AI / Patient Preference Predictors | [▶ open table](https://jlschwenkler.github.io/lit-survey-beta/examples/sample_output/ppp/literature_table.html) · [issues_final.json](examples/sample_output/ppp/issues_final.json) | 7 (A–G) — medical ethics, autonomy, surrogate decision-making |
+| Practical & non-observational knowledge of action | [▶ open table](https://jlschwenkler.github.io/lit-survey-beta/examples/sample_output/practical-knowledge/literature_table.html) · [issues_final.json](examples/sample_output/practical-knowledge/issues_final.json) | 6 (A1–A6) — philosophy of action, Anscombe, knowledge-how |
+| Negligence in ethics and law | [▶ open table](https://jlschwenkler.github.io/lit-survey-beta/examples/sample_output/negligence/literature_table.html) · [issues_final.json](examples/sample_output/negligence/issues_final.json) | 7 (A1–A5b) — culpability, reasonable-person standard, mens rea |
 
-Open any `literature_table.html` in a browser to see the live table (search box,
-sortable columns, inline abstracts, issue filter chips). The `issues_final.json`
-alongside it shows the one file you supply to get there.
+Each table is fully live — search box, sortable columns, inline abstracts, issue
+filter chips. The `issues_final.json` alongside each one shows the single file
+you supply to get there.
 
 ---
 
