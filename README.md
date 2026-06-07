@@ -55,6 +55,23 @@ fresh project folder** — you swap in your topic, seeds, and issues.
 
 ---
 
+## Sample outputs
+
+Three complete pipeline runs on real subliteratures — each folder contains the
+ranked HTML table and the `issues_final.json` that drove the scoring:
+
+| Topic | Issues | Papers |
+|---|---|---|
+| [AI / Patient Preference Predictors](examples/sample_output/ppp/) | 7 (A–G) — medical ethics, autonomy, surrogate decision-making | 320 |
+| [Practical & non-observational knowledge of action](examples/sample_output/practical-knowledge/) | 6 (A1–A6) — philosophy of action, Anscombe, knowledge-how | ~200 |
+| [Negligence in ethics and law](examples/sample_output/negligence/) | 7 (A1–A5b) — culpability, reasonable-person standard, mens rea | ~470 |
+
+Open any `literature_table.html` in a browser to see the live table (search box,
+sortable columns, inline abstracts, issue filter chips). The `issues_final.json`
+alongside it shows the one file you supply to get there.
+
+---
+
 ## Is this a "Claude Code" tool? (No — it's standalone Python)
 
 A common question: **does this only work inside Claude Code, or can I use it from
