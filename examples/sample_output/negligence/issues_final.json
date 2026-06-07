@@ -1,0 +1,29 @@
+{
+  "description": "Final pruned issue list (matrix columns). Each core paper is scored 0-3 for DEPTH OF ENGAGEMENT against each issue. Papers may load on several issues; this is NOT a partition. The per-issue `weight` is used ONLY by build_lit_table.py to compute weighted leverage (Σ weight·depth over the core issues A1–A6); it does not affect scoring. Thesis-centered (2026-05-31): the culpable-failure / culpable-ignorance axis (A1, A4, A6) is up-weighted to 1.5; A3 and A5a (reasonable-person normativity, capacity/control grounding) down-weighted to 0.5. C3/C4 are non-core and excluded from leverage regardless of weight.",
+  "depth_scale": {
+    "0": "absent — does not engage this issue",
+    "1": "mentions / touches in passing",
+    "2": "engages substantively (a section, sustained discussion)",
+    "3": "central — a core thesis or organizing concern of the paper"
+  },
+  "issues": [
+    {"id": "A1", "label": "Culpability for unadverted risk", "weight": 1.5,
+     "question": "Can an agent be culpable for a risk they never adverted to, or does liability without advertence violate fair-notice / individual-responsibility principles?"},
+    {"id": "A2", "label": "Subjective vs. objective standard", "weight": 1.0,
+     "question": "Should liability for recklessness/negligence turn on the defendant's actual awareness, or on what a reasonable person would have recognized — and where is the line drawn (MPC, German conscious/unconscious negligence, dolus eventualis)?"},
+    {"id": "A3", "label": "Reasonable-person standard smuggles normativity", "weight": 0.5,
+     "question": "Does the 'reasonable person' standard do covert evaluative work, such that the 'objective' standard is not really objective?"},
+    {"id": "A4", "label": "Is negligence genuine culpability?", "weight": 1.5,
+     "question": "Is negligence a genuine form of culpability / mens rea, or does it fall short of real culpability because the agent lacked conscious choice or awareness?"},
+    {"id": "A5a", "label": "Grounds: capacity / control / reasons-responsiveness", "weight": 0.5,
+     "question": "Is culpability for negligence grounded in the agent's capacity, control, or reasons-responsiveness — including Hart's capacity / fair-opportunity condition and capacitarian and reasons-responsiveness accounts?"},
+    {"id": "A5b", "label": "Grounds: quality of will / attributability", "weight": 1.0,
+     "question": "Is culpability for negligence grounded in the agent's quality of will or attributability — their motivations, concern, and the way the conduct expresses who they are (Watson, Arpaly, A. Smith)?"},
+    {"id": "A6", "label": "Epistemic condition / culpable ignorance", "weight": 1.5,
+     "question": "Does ignorance exculpate unless the agent is culpable for the ignorance itself (tracing vs. non-tracing), and do agents owe reasonable epistemic precautions against risks they are unaware of?"},
+    {"id": "C3", "label": "Justification vs. excuse", "weight": 1.0,
+     "question": "What is the principled distinction between justification (negating wrongfulness) and excuse (negating culpability), and how should it be drawn?"},
+    {"id": "C4", "label": "Recklessness via intention concepts", "weight": 1.0,
+     "question": "How is the recklessness category justified or analyzed through intention concepts — oblique/indirect intention, knowledge, and willful blindness?"}
+  ]
+}

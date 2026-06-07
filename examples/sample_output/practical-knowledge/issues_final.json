@@ -1,0 +1,47 @@
+{
+  "description": "Final pruned issue list (matrix columns). Each in-scope paper is scored 0-3 for DEPTH OF ENGAGEMENT against each issue. Papers may load on several issues; this is NOT a partition.",
+  "depth_scale": {
+    "0": "absent — does not engage this issue",
+    "1": "mentions / touches in passing",
+    "2": "engages substantively (a section, sustained discussion)",
+    "3": "central — a core thesis or organizing concern of the paper"
+  },
+  "issues": [
+    {
+      "id": "A1",
+      "label": "Anscombe's Intention",
+      "question": "What is the structure of intentional action according to Anscombe's Intention, and how do acting for reasons, the mark of intentional action, and mistakes in performance relate to each other?",
+      "weight": 1.0
+    },
+    {
+      "id": "A2",
+      "label": "Knowledge condition",
+      "question": "Does intentional action require practical knowledge of what one is doing — and if so, can this knowledge condition be maintained even when action fails or the agent errs?",
+      "weight": 1.0
+    },
+    {
+      "id": "A3",
+      "label": "Non-observational knowledge",
+      "question": "How can an agent know what she is intentionally doing without observing herself, what is the nature of this non-observational knowledge, and does it extend to third-person or shared contexts?",
+      "weight": 1.0
+    },
+    {
+      "id": "A4",
+      "label": "Epistemology of practical knowledge",
+      "question": "What distinguishes practical knowledge from theoretical knowledge epistemologically — including its transparency to the agent, its relationship to action success, and its unity with the action itself?",
+      "weight": 1.0
+    },
+    {
+      "id": "A5",
+      "label": "Practical truth",
+      "question": "What is practical truth in the Aristotelian/Anscombean sense — is it truth 'in' action rather than 'about' action — and how does it integrate reason and desire in a distinctive way?",
+      "weight": 0.5
+    },
+    {
+      "id": "A6",
+      "label": "Knowledge-how",
+      "question": "Is knowledge-how a form of propositional knowledge (intellectualism) or a distinct practical/dispositional state (anti-intellectualism), and how does the knowledge-how debate connect to practical knowledge of what one is doing?",
+      "weight": 0.5
+    }
+  ]
+}
