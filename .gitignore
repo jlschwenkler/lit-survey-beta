@@ -33,6 +33,7 @@ issue_embeddings.npz
 # Your real issue list / project description (you supply these; keep them local
 # unless YOU choose to share them). The shipped examples/ versions are templates.
 issues_final.json
+!examples/sample_output/**/issues_final.json
 PROJECT_DESCRIPTION*
 
 # ── Caches, logs, reports, scratch — run artifacts ────────────────────────────
@@ -56,8 +57,9 @@ caselaw_cache.json
 new_cases.json
 carroll_towing_full.txt
 
-# Built outputs
+# Built outputs (exclude from tracking, except deliberate sample_output examples)
 literature_table.html
+!examples/sample_output/**/literature_table.html
 
 # OS
 .DS_Store

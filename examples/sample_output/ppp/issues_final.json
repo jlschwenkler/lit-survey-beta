@@ -1,0 +1,60 @@
+{
+    "description": "Issue list for the AI / Patient Preference Predictor (PPP) literature review. Each in-scope paper is scored 0-3 for DEPTH OF ENGAGEMENT on each issue (NOT a partition: a paper may load on several). `weight` is used by build_lit_table.py for weighted leverage; `core: false` excludes an issue from the leverage sum (it still appears as a filter chip). Drafted from the bottom-up discovery clusters + the known joints of the PPP debate; pruned to a tight 7-issue set. EDIT freely before scoring.",
+    "depth_scale": {
+        "0": "absent — does not engage this issue",
+        "1": "mentions / touches in passing",
+        "2": "engages substantively (a section, sustained discussion)",
+        "3": "central — a core thesis or organizing concern of the paper"
+    },
+    "issues": [
+        {
+            "id": "A",
+            "label": "Autonomy & statistical generalization",
+            "weight": 1.5,
+            "core": true,
+            "question": "Can predicting an incapacitated patient's preferences from population-level (or non-individual) data respect their autonomy, or does reliance on 'naked statistical evidence' fail to honor their own values and reasons (precedent vs. relational autonomy)?"
+        },
+        {
+            "id": "B",
+            "label": "Accuracy vs. respect — is being right enough?",
+            "weight": 1.5,
+            "core": true,
+            "question": "Even if a predictor (or surrogate) is more accurate on average, does accuracy settle the ethical question, or do other factors (the patient's freedom to choose, the evidence they would themselves rely on) matter independently?"
+        },
+        {
+            "id": "C",
+            "label": "The PPP / P4 proposal & its feasibility",
+            "weight": 1.5,
+            "core": true,
+            "question": "Is a Patient Preference Predictor (or the personalized P4 using individual data / LLM fine-tuning) technically feasible and ethically desirable as a tool to assist substituted judgment?"
+        },
+        {
+            "id": "D",
+            "label": "Substituted judgment vs. best interests",
+            "weight": 1.0,
+            "core": true,
+            "question": "Which standard should govern decisions for incapacitated patients — reconstructing what the patient would have chosen (substituted judgment) or their objective best interests — and is substituted judgment a coherent or 'fictional' standard?"
+        },
+        {
+            "id": "E",
+            "label": "Moral authority of surrogates & families",
+            "weight": 1.0,
+            "core": true,
+            "question": "What grounds a surrogate's or family's moral authority to decide for an incapacitated patient (knowledge, relationship, role), and does algorithmic prediction displace, undermine, or support that authority?"
+        },
+        {
+            "id": "F",
+            "label": "Dehumanization, relationship & paternalism",
+            "weight": 1.0,
+            "core": true,
+            "question": "Does delegating preference-determination to an algorithm erode the doctor–patient–family relationship, individuality, or dignity, or smuggle in a hidden paternalism (an AI that 'knows best')?"
+        },
+        {
+            "id": "G",
+            "label": "Advance directives & their limits (context)",
+            "weight": 1.0,
+            "core": false,
+            "question": "How well do advance directives and advance care planning actually work to capture and honor patients' wishes, and how does a PPP compare to or complement them?"
+        }
+    ]
+}
